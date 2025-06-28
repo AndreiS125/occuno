@@ -1,0 +1,111 @@
+/* Custom calendar styles */
+
+/* Time indicator line */
+.rbc-current-time-indicator {
+  background-color: #ef4444 !important;
+  height: 3px !important;
+  position: absolute;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 30 !important;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  margin-left: 0 !important;
+}
+
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -5px;
+  width: 12px;
+  height: 12px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  z-index: 31;
+}
+
+/* Force visibility of time slots that contain current time */
+.rbc-time-slot.rbc-now {
+  background-color: rgba(239, 68, 68, 0.05) !important;
+}
+
+/* Ensure the time view shows the indicator */
+.rbc-time-view .rbc-current-time-indicator {
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Target the time content area specifically */
+.rbc-time-content > * > * > .rbc-current-time-indicator {
+  display: block !important;
+  opacity: 1 !important;
+}
+
+/* Ensure the calendar has the now indicator class */
+.rbc-calendar.rbc-has-current-time-indicator .rbc-current-time-indicator {
+  display: block !important;
+}
+
+/* Brighter event colors in light mode */
+.rbc-event {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.rbc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+}
+
+/* Better contrast for event text */
+.rbc-event-content {
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Calendar grid styling */
+.rbc-time-slot {
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+/* Dark mode adjustments */
+.dark .rbc-time-slot {
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.dark .rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Today's column highlight */
+.rbc-today {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.dark .rbc-today {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Header styling */
+.rbc-header {
+  font-weight: 600;
+  padding: 8px 0;
+}
+
+/* Time gutter styling */
+.rbc-time-gutter {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.dark .rbc-time-gutter {
+  color: #9ca3af;
+} 
