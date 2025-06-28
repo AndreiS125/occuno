@@ -15,11 +15,19 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
     const { viewMode } = useCalendarView();
     
     if (viewMode === "calendar") {
-      // Calendar view: no top padding, full height
-      return <main className="h-screen">{children}</main>;
+      // Calendar view: account for fixed navigation height but NO animations or effects
+      return (
+        <main className="pt-16 h-screen">
+          {children}
+        </main>
+      );
     }
   }
   
   // Default layout for all other pages and Gantt view
-  return <main className="pt-12">{children}</main>;
+  return (
+    <main className="pt-20 min-h-screen">
+      {children}
+    </main>
+  );
 } 

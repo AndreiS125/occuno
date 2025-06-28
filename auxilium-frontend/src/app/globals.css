@@ -4,48 +4,70 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 211 100% 50%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 217.2 91.2% 19.8%;
-    --ring: 212.7 26.8% 83.9%;
-    --radius: 0.75rem;
+    /* High-tech color scheme with cyberpunk vibes */
+    --background: 220 27% 8%;  /* Deep dark blue-black */
+    --foreground: 210 100% 98%;
+    --card: 220 27% 10%;  /* Slightly lighter than background */
+    --card-foreground: 210 100% 98%;
+    --popover: 220 27% 12%;
+    --popover-foreground: 210 100% 98%;
+    --primary: 173 80% 45%;  /* Cyan tech blue */
+    --primary-foreground: 220 27% 8%;
+    --secondary: 262 83% 58%;  /* Electric purple */
+    --secondary-foreground: 220 27% 8%;
+    --muted: 220 27% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 173 80% 40%;
+    --accent-foreground: 220 27% 8%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 100% 98%;
+    --border: 220 27% 18%;
+    --input: 220 27% 12%;
+    --ring: 173 80% 45%;
+    --radius: 1rem;
+    
+    /* Glass morphism variables */
+    --glass-bg: rgba(20, 25, 40, 0.8);
+    --glass-border: rgba(59, 130, 246, 0.3);
+    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    
+    /* Glow effects */
+    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.4);
+    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.4);
+    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.3);
   }
 
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 211 100% 50%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 211 100% 50%;
+  .light {
+    /* Light mode with premium feel */
+    --background: 0 0% 100%;
+    --foreground: 220 27% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 27% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 27% 8%;
+    --primary: 173 80% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 262 83% 48%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 13% 96%;
+    --muted-foreground: 220 13% 45%;
+    --accent: 173 80% 35%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 96%;
+    --ring: 173 80% 35%;
+    
+    /* Light mode glass */
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(59, 130, 246, 0.2);
+    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    
+    /* Light mode glows */
+    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.3);
+    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.3);
+    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.2);
   }
 }
 
@@ -58,55 +80,378 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-image: 
+      radial-gradient(circle at 20% 80%, rgba(34, 197, 194, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, rgba(34, 197, 194, 0.1) 0%, transparent 50%);
+    background-attachment: fixed;
   }
 }
 
-/* Custom scrollbar */
+/* Modern custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: hsl(var(--background));
+  border-radius: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--secondary)) 100%
+  );
+  border-radius: 6px;
+  box-shadow: var(--glow-primary);
+  border: 2px solid hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: hsl(var(--muted-foreground) / 0.5);
+  box-shadow: var(--glow-secondary);
+  transform: scale(1.1);
 }
 
-/* Glass morphism effect */
+/* Glass morphism base class */
 .glass {
-  @apply backdrop-blur-xl bg-background/80 border border-border/50;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
 }
 
-/* Subtle gradient backgrounds */
-.gradient-subtle {
-  @apply bg-gradient-to-br from-background via-background to-muted/20;
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  pointer-events: none;
 }
 
-/* Apple-like card hover effect */
-.card-hover {
-  @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+/* Advanced glass variants */
+.glass-card {
+  @apply glass rounded-2xl;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Smooth transitions */
-* {
-  @apply transition-colors duration-200;
+.glass-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    var(--glass-shadow),
+    var(--glow-primary);
 }
 
-@keyframes fadeIn {
+.glass-nav {
+  @apply glass;
+  background: rgba(20, 25, 40, 0.95);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* Premium button effects */
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.btn-glow:hover::before {
+  left: 100%;
+}
+
+.btn-glow:hover {
+  box-shadow: var(--glow-primary);
+  transform: translateY(-2px);
+}
+
+/* Futuristic gradients */
+.gradient-tech {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--secondary)) 50%,
+    hsl(var(--accent)) 100%
+  );
+}
+
+.gradient-tech-subtle {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary) / 0.1) 0%,
+    hsl(var(--secondary) / 0.1) 50%,
+    hsl(var(--accent) / 0.1) 100%
+  );
+}
+
+/* Animated borders */
+.border-glow {
+  position: relative;
+  border: 1px solid transparent;
+  background: linear-gradient(hsl(var(--card)), hsl(var(--card))) padding-box,
+              linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary))) border-box;
+  border-radius: 1rem;
+}
+
+.border-glow-animated {
+  position: relative;
+  background: hsl(var(--card));
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.border-glow-animated::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  background: linear-gradient(45deg, hsl(var(--primary)), hsl(var(--secondary)), hsl(var(--accent)));
+  border-radius: inherit;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: subtract;
+  animation: border-spin 3s linear infinite;
+}
+
+@keyframes border-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Text effects */
+.text-glow {
+  text-shadow: var(--glow-accent);
+}
+
+.text-gradient {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--secondary)) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Smooth transitions for NON-CALENDAR elements only */
+.safe-transition {
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Advanced animations */
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
   }
   to {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: var(--glow-primary);
+  }
+  50% {
+    box-shadow: var(--glow-secondary);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 0.5s ease-out forwards;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Floating elements */
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Ultra-modern loading states */
+.loading-shimmer {
+  background: linear-gradient(
+    110deg,
+    hsl(var(--muted)) 8%,
+    hsl(var(--primary) / 0.3) 18%,
+    hsl(var(--muted)) 33%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* CRITICAL: Preserve original calendar styles exactly */
+.rbc-calendar {
+  /* Preserve all original calendar styles */
+  position: relative;
+}
+
+.rbc-calendar * {
+  /* Remove any global transitions for calendar elements */
+  transition: none !important;
+}
+
+.rbc-time-content {
+  /* Preserve original time content styles */
+  position: relative;
+}
+
+.rbc-time-view {
+  /* Ensure time view positioning is preserved */
+  position: relative;
+}
+
+.rbc-time-slot {
+  /* Preserve time slot positioning */
+  position: relative;
+}
+
+.rbc-event {
+  /* Preserve event positioning and interactions */
+  position: absolute;
+  cursor: pointer;
+  transition: none !important;
+}
+
+.rbc-event:hover {
+  /* Preserve hover behavior */
+  z-index: 10;
+}
+
+/* Time indicator - PRESERVE EXACTLY */
+.time-indicator {
+  /* Preserve original time indicator styles exactly */
+  position: absolute;
+  height: 3px;
+  background-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* Gantt chart preservation */
+.gantt-chart * {
+  /* Remove global transitions for Gantt elements */
+  transition: none !important;
+}
+
+/* Drag and drop preservation */
+[draggable="true"] {
+  /* Ensure draggable elements work properly */
+  cursor: grab !important;
+  transition: none !important;
+}
+
+[draggable="true"]:active {
+  cursor: grabbing !important;
+}
+
+/* Specific resize handle styling */
+.cursor-w-resize {
+  cursor: w-resize !important;
+}
+
+.cursor-e-resize {
+  cursor: e-resize !important;
+}
+
+.cursor-move {
+  cursor: move !important;
+}
+
+/* Gantt chart specific overrides */
+.gantt-chart [draggable="true"] {
+  transition: none !important;
+  transform: none !important;
+}
+
+.gantt-chart .group:hover [draggable="true"] {
+  /* Ensure resize handles are visible on hover */
+  opacity: 1 !important;
+}
+
+/* Prevent any animations on Gantt chart elements */
+.gantt-chart * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Allow only specific transitions for non-functional styling */
+.gantt-chart .cursor-w-resize,
+.gantt-chart .cursor-e-resize {
+  transition: background-color 0.2s ease !important;
 } 

@@ -145,7 +145,7 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
     
     // For tasks, prefer start_time/end_time over start_date/due_date
     if (objective.objective_type === ObjectiveType.TASK) {
-      const task = objective as any; // Cast to access task-specific fields
+      const task = objective as any;
       if (task.start_time && task.end_time) {
         startDate = new Date(task.start_time);
         endDate = new Date(task.end_time);
@@ -220,19 +220,35 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
     const objective = objectives.find(obj => obj.id === dragItem.id);
     if (!objective) return;
     
-    const dropDate = new Date(days[dayIndex]);
+    // Get the target date but preserve the original time of day
+    const targetDay = days[dayIndex];
     let newStartDate: Date;
     let newEndDate: Date;
     
     if (dragItem.dragType === 'move') {
-      // Calculate new dates based on drop position (maintain duration)
+      // Calculate new dates based on drop position (maintain duration and time of day)
       const duration = dragItem.endDate.getTime() - dragItem.startDate.getTime();
-      newStartDate = dropDate;
+      
+      // Preserve the time of day from the original start date
+      newStartDate = new Date(targetDay);
+      newStartDate.setHours(
+        dragItem.startDate.getHours(),
+        dragItem.startDate.getMinutes(),
+        dragItem.startDate.getSeconds(),
+        dragItem.startDate.getMilliseconds()
+      );
+      
       newEndDate = new Date(newStartDate.getTime() + duration);
     } else if (dragItem.dragType === 'resize-start') {
-      // Resize from start (keep end date fixed)
-      newStartDate = dropDate;
-      newEndDate = dragItem.endDate;
+      // Resize from start (keep end date fixed, preserve end time)
+      newStartDate = new Date(targetDay);
+      newStartDate.setHours(
+        dragItem.startDate.getHours(),
+        dragItem.startDate.getMinutes(),
+        dragItem.startDate.getSeconds(),
+        dragItem.startDate.getMilliseconds()
+      );
+      newEndDate = new Date(dragItem.endDate);
       
       // Ensure start is before end
       if (newStartDate >= newEndDate) {
@@ -241,9 +257,15 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
         return;
       }
     } else if (dragItem.dragType === 'resize-end') {
-      // Resize from end (keep start date fixed)
-      newStartDate = dragItem.startDate;
-      newEndDate = dropDate;
+      // Resize from end (keep start date fixed, preserve start time)
+      newStartDate = new Date(dragItem.startDate);
+      newEndDate = new Date(targetDay);
+      newEndDate.setHours(
+        dragItem.endDate.getHours(),
+        dragItem.endDate.getMinutes(),
+        dragItem.endDate.getSeconds(),
+        dragItem.endDate.getMilliseconds()
+      );
       
       // Ensure end is after start
       if (newEndDate <= newStartDate) {
@@ -367,6 +389,15 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
             style={{ width: `${progress}%` }}
           />
           
+          {/* Start resize handle (left tail) */}
+          <div
+            draggable
+            onDragStart={(e) => handleDragStart(e, objective, 'resize-start')}
+            className="absolute left-0 top-0 w-2 h-full cursor-w-resize bg-white/20 hover:bg-white/40 transition-colors opacity-0 group-hover:opacity-100"
+            style={{ borderRadius: '6px 0 0 6px' }}
+            title="Drag to change start date"
+          />
+          
           {/* Main content (draggable for moving) */}
           <div
             draggable
@@ -384,6 +415,15 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
               </span>
             )}
           </div>
+          
+          {/* End resize handle (right tail) */}
+          <div
+            draggable
+            onDragStart={(e) => handleDragStart(e, objective, 'resize-end')}
+            className="absolute right-0 top-0 w-2 h-full cursor-e-resize bg-white/20 hover:bg-white/40 transition-colors opacity-0 group-hover:opacity-100"
+            style={{ borderRadius: '0 6px 6px 0' }}
+            title="Drag to change end date"
+          />
         </div>
       );
     }
@@ -410,16 +450,32 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
               opacity
             }}
           >
+            {/* Start resize handle for recurring instances */}
+            <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, instance, 'resize-start')}
+              className="absolute left-0 top-0 w-1.5 h-full cursor-w-resize bg-white/20 hover:bg-white/40 transition-colors opacity-0 group-hover:opacity-100"
+              style={{ borderRadius: '4px 0 0 4px' }}
+            />
+            
             <div
               draggable
               onDragStart={(e) => handleDragStart(e, instance, 'move')}
               onClick={() => setSelectedObjective(instance)}
-              className="absolute inset-0 cursor-move flex items-center px-1 text-white"
+              className="absolute inset-x-1.5 inset-y-0 cursor-move flex items-center px-1 text-white"
             >
               <span className="text-xs font-medium truncate">
                 {instance.title} (R)
               </span>
             </div>
+            
+            {/* End resize handle for recurring instances */}
+            <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, instance, 'resize-end')}
+              className="absolute right-0 top-0 w-1.5 h-full cursor-e-resize bg-white/20 hover:bg-white/40 transition-colors opacity-0 group-hover:opacity-100"
+              style={{ borderRadius: '0 4px 4px 0' }}
+            />
           </div>
         );
       });
@@ -429,7 +485,7 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
   };
 
   return (
-    <div className="bg-card border rounded-xl overflow-hidden">
+    <div className="gantt-chart bg-card border rounded-xl overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between bg-muted/50">
         <div className="flex items-center space-x-4">

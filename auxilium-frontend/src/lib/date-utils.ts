@@ -27,37 +27,47 @@ export const formatDateOnly = (date: Date): string => {
 };
 
 /**
- * Parse datetime-local string to ISO string while preserving the intended date/time
- * This prevents timezone shifts when storing dates
+ * Parse datetime-local string to ISO string while properly handling timezone conversion
+ * This correctly converts user's local time to UTC for storage
  */
 export const parseLocalDateTimeToISO = (localDateTimeString: string): string => {
   if (!localDateTimeString) return '';
   
-  // Parse the string manually to avoid timezone conversion
+  // Parse the datetime-local format: YYYY-MM-DDTHH:mm
   const [datePart, timePart] = localDateTimeString.split('T');
   const [year, month, day] = datePart.split('-').map(Number);
   const [hours, minutes] = (timePart || '00:00').split(':').map(Number);
   
-  // Create a UTC date with the exact values entered (no timezone conversion)
-  const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0));
+  // Create a Date object in the user's local timezone
+  // Note: month is 0-indexed in JavaScript Date constructor
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
   
-  return utcDate.toISOString();
+  // Return the ISO string which automatically converts to UTC
+  return localDate.toISOString();
 };
 
 /**
  * Parse date-only string to ISO string
- * Sets time to start of day in UTC
+ * Sets time to start of day in user's local timezone, then converts to UTC
  */
 export const parseDateOnlyToISO = (dateString: string, endOfDay = false): string => {
   if (!dateString) return '';
   
+  // Parse the date format: YYYY-MM-DD
   const [year, month, day] = dateString.split('-').map(Number);
   
+  // Create a Date object in the user's local timezone
+  const localDate = new Date(year, month - 1, day); // month is 0-indexed
+  
   if (endOfDay) {
-    return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999)).toISOString();
+    // Set to end of day in local timezone
+    localDate.setHours(23, 59, 59, 999);
   } else {
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).toISOString();
+    // Set to start of day in local timezone  
+    localDate.setHours(0, 0, 0, 0);
   }
+  
+  return localDate.toISOString();
 };
 
 /**
