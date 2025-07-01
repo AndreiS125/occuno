@@ -70,6 +70,7 @@ class BaseObjective(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
+    all_day: bool = False  # Explicit all-day flag - no more datetime inference!
     
     priority_score: float = Field(default=0.5, ge=0.0, le=1.0)
     complexity_score: float = Field(default=0.5, ge=0.0, le=1.0)

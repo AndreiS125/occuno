@@ -68,7 +68,8 @@ export function ObjectiveCard({ objective, onUpdate, onDelete }: ObjectiveCardPr
   return (
     <>
       <motion.div
-        whileHover={{ scale: 1.02 }}
+        whileHover={{ scale: 1.01 }}
+        transition={{ duration: 0.1 }}
         className="bg-card border border-border rounded-xl p-6 h-full flex flex-col"
       >
         {/* Header */}
@@ -145,6 +146,7 @@ export function ObjectiveCard({ objective, onUpdate, onDelete }: ObjectiveCardPr
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${objective.completion_percentage}%` }}
+                    transition={{ duration: 0.2 }}
                     className="h-full bg-primary"
                   />
                 </div>

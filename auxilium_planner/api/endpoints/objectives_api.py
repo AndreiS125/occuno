@@ -33,6 +33,7 @@ class ObjectiveCreateRequest(BaseModel):
     parent_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
+    all_day: bool = False  # Explicit all-day flag
     # Task-specific fields
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -52,8 +53,10 @@ class ObjectiveUpdateRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     objective_type: Optional[ObjectiveType] = None
+    parent_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
+    all_day: Optional[bool] = None  # Explicit all-day flag
     # Task-specific fields
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None

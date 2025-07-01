@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
 import { 
   Save, 
   User,
@@ -44,6 +45,15 @@ export default function SettingsPage() {
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Refs for GSAP animations
+  const containerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const appearanceRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const scheduleRef = useRef<HTMLDivElement>(null);
+  const saveRef = useRef<HTMLDivElement>(null);
   
   // Prevent hydration mismatch
   useEffect(() => {
@@ -135,6 +145,51 @@ export default function SettingsPage() {
     }
   };
 
+  // GSAP animations
+  useGSAP(() => {
+    if (loading || !mounted) return;
+
+    const tl = gsap.timeline();
+    
+    // Header animation
+    tl.fromTo(headerRef.current, 
+      { opacity: 0, y: 20 }, 
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }
+    );
+
+    // Staggered section animations
+    tl.fromTo(profileRef.current, 
+      { opacity: 0, x: -20 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.3"
+    );
+
+    tl.fromTo(appearanceRef.current, 
+      { opacity: 0, x: -20 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.4"
+    );
+
+    tl.fromTo(notificationsRef.current, 
+      { opacity: 0, x: -20 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.4"
+    );
+
+    tl.fromTo(scheduleRef.current, 
+      { opacity: 0, x: -20 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.4"
+    );
+
+    tl.fromTo(saveRef.current, 
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.3"
+    );
+
+  }, { dependencies: [loading, mounted] });
+
   if (loading || !mounted) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -145,24 +200,18 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-8"
-      >
-      {/* Header */}
-        <div className="text-center">
-        <h1 className="text-3xl font-bold mb-2">Settings</h1>
-        <p className="text-muted-foreground">
+      <div ref={containerRef} className="space-y-8">
+        {/* Header */}
+        <div ref={headerRef} className="text-center">
+          <h1 className="text-3xl font-bold mb-2">Settings</h1>
+          <p className="text-muted-foreground">
             Customize your Auxilium experience
-        </p>
-      </div>
+          </p>
+        </div>
 
         {/* Profile Section */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
+        <div
+          ref={profileRef}
           className="bg-card border border-border rounded-xl p-6"
         >
           <div className="flex items-center space-x-3 mb-6">
@@ -193,13 +242,11 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Appearance Section */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
+        <div
+          ref={appearanceRef}
           className="bg-card border border-border rounded-xl p-6"
         >
           <div className="flex items-center space-x-3 mb-6">
@@ -207,7 +254,7 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold">Appearance</h2>
           </div>
 
-            <div>
+          <div>
             <label className="block text-sm font-medium mb-2">Theme</label>
             <div className="flex gap-2">
               {(["light", "dark", "system"] as const).map((themeOption) => (
@@ -225,13 +272,11 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Notifications Section */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
+        <div
+          ref={notificationsRef}
           className="bg-card border border-border rounded-xl p-6"
         >
           <div className="flex items-center space-x-3 mb-6">
@@ -241,11 +286,11 @@ export default function SettingsPage() {
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <div>
+              <div>
                 <p className="font-medium">Enable Notifications</p>
-                  <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Receive reminders and updates
-                  </p>
+                </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -277,13 +322,11 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
 
         {/* Work Schedule Section */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
+        <div
+          ref={scheduleRef}
           className="bg-card border border-border rounded-xl p-6"
         >
           <div className="flex items-center space-x-3 mb-6">
@@ -343,13 +386,11 @@ export default function SettingsPage() {
               </select>
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Save Button */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+        <div
+          ref={saveRef}
           className="flex justify-end"
         >
           <Button
@@ -360,8 +401,8 @@ export default function SettingsPage() {
             <Save className="w-4 h-4" />
             <span>{saving ? "Saving..." : "Save Settings"}</span>
           </Button>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 } 

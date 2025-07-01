@@ -14,7 +14,7 @@ import {
   Battery,
   BatteryLow
 } from "lucide-react";
-import { Objective } from "@/types";
+import { Objective, ObjectiveStatus, ObjectiveType, EnergyLevel } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ObjectiveModal } from "@/components/modals";
 import { ObjectiveCard } from "@/components/objectives/objective-card";
@@ -45,24 +45,23 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
   const [showDetails, setShowDetails] = useState(false);
 
   const typeIcons = {
-    ROOT: <AlertCircle className="w-4 h-4" />,
-    SUB_OBJECTIVE: <Target className="w-4 h-4" />,
-    TASK: <CheckCircle className="w-4 h-4" />,
-    HABIT: <Clock className="w-4 h-4" />
+    [ObjectiveType.MAIN_OBJECTIVE]: <AlertCircle className="w-4 h-4" />,
+    [ObjectiveType.SUB_OBJECTIVE]: <Target className="w-4 h-4" />,
+    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />
   };
 
   const energyIcons = {
-    HIGH: <Zap className="w-3 h-3 text-yellow-500" />,
-    MEDIUM: <Battery className="w-3 h-3 text-blue-500" />,
-    LOW: <BatteryLow className="w-3 h-3 text-green-500" />
+    [EnergyLevel.HIGH]: <Zap className="w-3 h-3 text-yellow-500" />,
+    [EnergyLevel.MEDIUM]: <Battery className="w-3 h-3 text-blue-500" />,
+    [EnergyLevel.LOW]: <BatteryLow className="w-3 h-3 text-green-500" />
   };
 
   const statusColors = {
-    NOT_STARTED: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-    IN_PROGRESS: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    COMPLETED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    BLOCKED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-    CANCELLED: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+    [ObjectiveStatus.NOT_STARTED]: "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100",
+    [ObjectiveStatus.IN_PROGRESS]: "bg-blue-200 text-blue-900 dark:bg-blue-700 dark:text-blue-100",
+    [ObjectiveStatus.COMPLETED]: "bg-green-200 text-green-900 dark:bg-green-700 dark:text-green-100",
+    [ObjectiveStatus.BLOCKED]: "bg-red-200 text-red-900 dark:bg-red-700 dark:text-red-100",
+    [ObjectiveStatus.CANCELLED]: "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
   };
 
   const handleCreateSubObjective = async (data: any) => {
@@ -94,7 +93,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: level * 0.05 }}
+        transition={{ delay: level * 0.02 }}
         className={cn(
           "relative",
           level > 0 && "ml-8"
@@ -115,7 +114,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
           <div
             className={cn(
               "bg-card border rounded-xl p-4 mb-3 transition-all cursor-pointer",
-              objective.status === "COMPLETED" 
+              objective.status === ObjectiveStatus.COMPLETED 
                 ? "border-green-500/50 bg-green-50/5" 
                 : "border-border hover:border-primary/50"
             )}
@@ -158,12 +157,13 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
                     </span>
 
                     {/* Progress Bar */}
-                    {objective.status === "IN_PROGRESS" && (
+                    {objective.status === ObjectiveStatus.IN_PROGRESS && (
                       <div className="flex-1 max-w-[200px]">
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${childProgress}%` }}
+                            transition={{ duration: 0.3 }}
                             className="h-full bg-primary"
                           />
                         </div>
@@ -179,7 +179,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
               </div>
 
               {/* Add Sub-objective Button */}
-              {objective.objective_type !== "TASK" && objective.objective_type !== "HABIT" && (
+              {objective.objective_type !== ObjectiveType.TASK && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -206,6 +206,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
                   className="mt-4 pt-4 border-t border-border"
                   onClick={(e) => e.stopPropagation()} // Prevent event bubbling
                 >
@@ -227,6 +228,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
             >
               {childObjectives.map((child, index) => (
                 <TreeNode

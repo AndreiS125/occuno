@@ -26,7 +26,7 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
   
   // Default layout for all other pages and Gantt view
   return (
-    <main className="pt-20 min-h-screen">
+    <main className="pt-16 min-h-screen">
       {children}
     </main>
   );

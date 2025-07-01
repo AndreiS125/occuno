@@ -22,7 +22,6 @@ import { cn } from "@/lib/utils";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from "date-fns";
 import { expandRecurringEvent } from "@/lib/date-utils";
 import { objectivesApi } from "@/lib/api";
-import toast from "react-hot-toast";
 
 interface GanttChartProps {
   objectives: Objective[];
@@ -57,30 +56,32 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
     return expanded;
   }, [objectives, currentMonth]);
 
+  // Filter for all-day events only (project timeline items)
+  const allDayObjectives = useMemo(() => {
+    return objectives.filter(obj => 
+      obj.start_date && 
+      obj.due_date && 
+      obj.all_day === true  // Use explicit all_day field - much cleaner!
+    );
+  }, [objectives]);
+
   // Get all objectives with dates that fall within the current month view
-  const objectivesWithDates = expandedObjectives.filter(obj => {
+  const objectivesWithDates = allDayObjectives.filter(obj => {
     if (!obj.due_date && !obj.created_at) return false;
     
-    // Get the objective's date range
-    let startDate: Date;
-    let endDate: Date;
+    // FILTER: Only show all-day events in Gantt chart (project timeline view)
+    // Now using the explicit all_day field - much cleaner!
+    console.log(`✅ Gantt: Including all-day event "${obj.title}":`, {
+      start_date: obj.start_date,
+      due_date: obj.due_date,
+      all_day: obj.all_day,
+      type: obj.objective_type
+    });
     
-    if (obj.objective_type === ObjectiveType.TASK) {
-      const task = obj as any;
-      if (task.start_time && task.end_time) {
-        startDate = new Date(task.start_time);
-        endDate = new Date(task.end_time);
-      } else if (obj.start_date && obj.due_date) {
-        startDate = new Date(obj.start_date);
-        endDate = new Date(obj.due_date);
-      } else {
-        startDate = new Date(obj.created_at);
-        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
-      }
-    } else {
-      startDate = obj.start_date ? new Date(obj.start_date) : new Date(obj.created_at);
-      endDate = obj.due_date ? new Date(obj.due_date) : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-    }
+    // SIMPLIFIED: For all-day events, always use start_date/due_date regardless of type
+    // This avoids the confusing start_time/end_time logic that was breaking all-day tasks
+    const startDate = obj.start_date ? new Date(obj.start_date) : new Date(obj.created_at);
+    const endDate = obj.due_date ? new Date(obj.due_date) : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
     
     // Check if the objective overlaps with the current month view
     const monthStart = startOfMonth(currentMonth);
@@ -133,65 +134,51 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
   };
 
   const typeColors = {
-    [ObjectiveType.MAIN_OBJECTIVE]: "bg-purple-500",
-    [ObjectiveType.SUB_OBJECTIVE]: "bg-blue-500",
-    [ObjectiveType.TASK]: "bg-green-500"
+    [ObjectiveType.MAIN_OBJECTIVE]: "bg-purple-600",
+    [ObjectiveType.SUB_OBJECTIVE]: "bg-blue-600",
+    [ObjectiveType.TASK]: "bg-green-600"
   };
 
   // Calculate bar position and width for an objective
   const getBarStyle = (objective: Objective) => {
-    let startDate: Date;
-    let endDate: Date;
+    // SIMPLIFIED: Since Gantt chart only shows all-day events, always use start_date/due_date
+    // This avoids the confusing task-specific logic that was breaking all-day tasks
+    const startDate = objective.start_date ? new Date(objective.start_date) : new Date(objective.created_at);
+    const endDate = objective.due_date ? new Date(objective.due_date) : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
     
-    // For tasks, prefer start_time/end_time over start_date/due_date
-    if (objective.objective_type === ObjectiveType.TASK) {
-      const task = objective as any;
-      if (task.start_time && task.end_time) {
-        startDate = new Date(task.start_time);
-        endDate = new Date(task.end_time);
-      } else if (objective.start_date && objective.due_date) {
-        startDate = new Date(objective.start_date);
-        endDate = new Date(objective.due_date);
-      } else {
-        // Fallback for tasks without proper dates
-        startDate = new Date(objective.created_at);
-        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000); // 1 day duration
-      }
-    } else {
-      // For non-task objectives
-      startDate = objective.start_date ? new Date(objective.start_date) : new Date(objective.created_at);
-      endDate = objective.due_date ? new Date(objective.due_date) : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000); // Default to 7 days
-    }
+    // Normalize dates to start of day for grid alignment
+    const startOfDay = new Date(startDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(0, 0, 0, 0);
     
-    // Calculate positions relative to month start
-    const startDiff = Math.max(0, (startDate.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24));
-    const endDiff = Math.min(days.length, (endDate.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24) + 1);
+    // Calculate positions relative to month start (in days)
+    const startDayDiff = Math.floor((startOfDay.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24));
+    const endDayDiff = Math.floor((endOfDay.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24));
     
-    const left = startDiff * dayWidth;
-    const width = Math.max(dayWidth, (endDiff - startDiff) * dayWidth);
+    // Ensure start position is within visible range
+    const clampedStartDay = Math.max(0, startDayDiff);
+    // Ensure end position is within visible range, and include the end day
+    const clampedEndDay = Math.min(days.length - 1, endDayDiff);
     
-    return { left, width };
+    // Calculate pixel positions
+    const left = clampedStartDay * dayWidth;
+    // Width should span from start day to end day (inclusive), with small padding to stay within grid
+    const durationInDays = Math.max(1, clampedEndDay - clampedStartDay + 1);
+    const width = (durationInDays * dayWidth) - 2; // 2px padding to stay within grid lines
+    
+    return { 
+      left: left + 1, // 1px offset to avoid overlapping grid line
+      width: Math.max(dayWidth - 2, width) // Minimum width with padding
+    };
   };
 
   // Handle drag start
   const handleDragStart = (e: React.DragEvent, objective: Objective, dragType: 'move' | 'resize-start' | 'resize-end' = 'move') => {
-    let startDate: Date;
-    let endDate: Date;
-    
-    // For tasks, use start_time/end_time if available
-    if (objective.objective_type === ObjectiveType.TASK) {
-      const task = objective as any;
-      if (task.start_time && task.end_time) {
-        startDate = new Date(task.start_time);
-        endDate = new Date(task.end_time);
-      } else {
-        startDate = objective.start_date ? new Date(objective.start_date) : new Date(objective.created_at);
-        endDate = objective.due_date ? new Date(objective.due_date) : new Date();
-      }
-    } else {
-      startDate = objective.start_date ? new Date(objective.start_date) : new Date(objective.created_at);
-      endDate = objective.due_date ? new Date(objective.due_date) : new Date();
-    }
+    // SIMPLIFIED: Since Gantt chart only shows all-day events, always use start_date/due_date
+    // This avoids the confusing task-specific logic that was breaking all-day tasks
+    const startDate = objective.start_date ? new Date(objective.start_date) : new Date(objective.created_at);
+    const endDate = objective.due_date ? new Date(objective.due_date) : new Date();
     
     setDragItem({
       id: objective.id,
@@ -252,7 +239,6 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
       
       // Ensure start is before end
       if (newStartDate >= newEndDate) {
-        toast.error("Start date must be before end date");
         setDragItem(null);
         return;
       }
@@ -269,7 +255,6 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
       
       // Ensure end is after start
       if (newEndDate <= newStartDate) {
-        toast.error("End date must be after start date");
         setDragItem(null);
         return;
       }
@@ -291,9 +276,8 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
       }
       
       await onUpdate(objective.id, updates);
-      toast.success(dragItem.dragType === 'move' ? "Task rescheduled!" : "Task duration updated!");
     } catch (error) {
-      toast.error("Failed to update task");
+      // Handle error
     }
     
     setDragItem(null);
@@ -311,12 +295,11 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
         ...data,
         parent_id: createParentId
       });
-      toast.success("Objective created!");
       setShowCreateModal(false);
       setCreateParentId(undefined);
       onRefresh();
     } catch (error) {
-      toast.error("Failed to create objective");
+      // Handle error
     }
   };
 
@@ -331,12 +314,11 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
     if (selectedObjective) {
       try {
         await onUpdate(selectedObjective.id, data);
-        toast.success("Objective updated!");
         setShowEditModal(false);
         setSelectedObjective(null);
         onRefresh();
       } catch (error) {
-        toast.error("Failed to update objective");
+        // Handle error
       }
     }
   };
@@ -489,7 +471,10 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between bg-muted/50">
         <div className="flex items-center space-x-4">
-          <h2 className="text-xl font-semibold">Gantt Chart</h2>
+          <div>
+            <h2 className="text-xl font-semibold">Gantt Chart</h2>
+            <p className="text-xs text-muted-foreground">Project timeline view • All-day events only</p>
+          </div>
           <div className="flex items-center space-x-2">
             <Button
               size="sm"
@@ -635,20 +620,16 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
       {/* Legend */}
       <div className="p-4 border-t bg-muted/20 flex items-center justify-center space-x-6">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-purple-500 rounded" />
-          <span className="text-xs">Root</span>
+          <div className="w-4 h-4 bg-purple-600 rounded" />
+          <span className="text-xs">Main Objective</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-blue-500 rounded" />
+          <div className="w-4 h-4 bg-blue-600 rounded" />
           <span className="text-xs">Sub-objective</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-green-500 rounded" />
+          <div className="w-4 h-4 bg-green-600 rounded" />
           <span className="text-xs">Task</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-orange-500 rounded" />
-          <span className="text-xs">Habit</span>
         </div>
       </div>
 

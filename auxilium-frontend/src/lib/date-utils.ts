@@ -27,60 +27,28 @@ export const formatDateOnly = (date: Date): string => {
 };
 
 /**
- * Parse datetime-local string to ISO string while properly handling timezone conversion
- * This correctly converts user's local time to UTC for storage
+ * Parse a date-only string to ISO format with midnight time
  */
-export const parseLocalDateTimeToISO = (localDateTimeString: string): string => {
-  if (!localDateTimeString) return '';
+export const parseDateOnlyToISO = (dateString: string, isEndDate: boolean = false): string => {
+  const date = new Date(dateString + 'T00:00:00.000Z');
   
-  // Parse the datetime-local format: YYYY-MM-DDTHH:mm
-  const [datePart, timePart] = localDateTimeString.split('T');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hours, minutes] = (timePart || '00:00').split(':').map(Number);
-  
-  // Create a Date object in the user's local timezone
-  // Note: month is 0-indexed in JavaScript Date constructor
-  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  
-  // Return the ISO string which automatically converts to UTC
-  return localDate.toISOString();
-};
-
-/**
- * Parse date-only string to ISO string
- * Sets time to start of day in user's local timezone, then converts to UTC
- */
-export const parseDateOnlyToISO = (dateString: string, endOfDay = false): string => {
-  if (!dateString) return '';
-  
-  // Parse the date format: YYYY-MM-DD
-  const [year, month, day] = dateString.split('-').map(Number);
-  
-  // Create a Date object in the user's local timezone
-  const localDate = new Date(year, month - 1, day); // month is 0-indexed
-  
-  if (endOfDay) {
-    // Set to end of day in local timezone
-    localDate.setHours(23, 59, 59, 999);
-  } else {
-    // Set to start of day in local timezone  
-    localDate.setHours(0, 0, 0, 0);
+  // For end dates, we want the end of the day (23:59:59) instead of start of day
+  if (isEndDate) {
+    date.setUTCHours(23, 59, 59, 999);
   }
   
-  return localDate.toISOString();
+  return date.toISOString();
 };
 
 /**
- * Check if a date string represents an all-day event
+ * Parse a local datetime string to ISO format
  */
-export const isAllDayDate = (dateString: string | null | undefined): boolean => {
-  if (!dateString) return true;
-  
-  return !dateString.includes('T') || 
-         dateString.endsWith('T00:00:00.000Z') ||
-         dateString.endsWith('T00:00:00+00:00') ||
-         dateString.endsWith('T00:00:00');
+export const parseLocalDateTimeToISO = (dateTimeString: string): string => {
+  const date = new Date(dateTimeString);
+  return date.toISOString();
 };
+
+// Removed isAllDayDate function - now using explicit all_day field from backend
 
 /**
  * Convert ISO date string to local date object

@@ -40,6 +40,7 @@ export interface Objective {
   updated_at?: string;
   due_date?: string;
   start_date?: string;
+  all_day?: boolean;  // Explicit all-day flag
   priority_score: number;
   complexity_score: number;
   energy_requirement: EnergyLevel;

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -21,6 +22,15 @@ import { Button } from "@/components/ui/button";
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'quarter'>('week');
+  
+  // Refs for GSAP animations
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timeRangeRef = useRef<HTMLDivElement>(null);
+  const metricsRef = useRef<HTMLDivElement>(null);
+  const chartsRef = useRef<HTMLDivElement>(null);
+  const energyRef = useRef<HTMLDivElement>(null);
+  const insightsRef = useRef<HTMLDivElement>(null);
+  
   const { data: objectives = [] } = useQuery({
     queryKey: ['objectives-analytics'],
     queryFn: async () => {
@@ -101,12 +111,113 @@ export default function AnalyticsPage() {
     1
   );
 
+  // GSAP animations
+  useGSAP(() => {
+    if (objectives.length === 0) return;
+
+    const tl = gsap.timeline();
+    
+    // Time range selector
+    tl.fromTo(timeRangeRef.current, 
+      { opacity: 0, y: -20 }, 
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }
+    );
+
+    // Key metrics with stagger
+    tl.fromTo(".metric-card", 
+      { opacity: 0, y: 20, scale: 0.9 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        scale: 1, 
+        duration: 0.5, 
+        stagger: 0.1,
+        ease: "back.out(1.2)" 
+      },
+      "-=0.3"
+    );
+
+    // Charts with different directions
+    tl.fromTo(".chart-weekly", 
+      { opacity: 0, x: -20 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.2"
+    );
+    
+    tl.fromTo(".chart-types", 
+      { opacity: 0, x: 20 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.5"
+    );
+
+    // Animate activity bars
+    tl.fromTo(".activity-bar", 
+      { opacity: 0, x: -20 },
+      { 
+        opacity: 1, 
+        x: 0, 
+        duration: 0.5, 
+        stagger: 0.05,
+        ease: "power2.out" 
+      },
+      "-=0.3"
+    );
+
+    // Animate progress bars
+    gsap.to(".progress-bar", {
+      width: "var(--target-width)",
+      duration: 0.8,
+      delay: 1,
+      stagger: 0.05,
+      ease: "power2.out"
+    });
+
+    // Animate pie chart paths
+    tl.fromTo(".pie-path", 
+      { opacity: 0, scale: 0.8 },
+      { 
+        opacity: 1, 
+        scale: 1, 
+        duration: 0.5, 
+        stagger: 0.1,
+        ease: "back.out(1.2)" 
+      },
+      "-=0.5"
+    );
+
+    // Energy distribution
+    tl.fromTo(energyRef.current, 
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.2"
+    );
+
+    // Energy bars
+    tl.fromTo(".energy-bar", 
+      { height: 0 },
+      { 
+        height: "var(--target-height)",
+        duration: 0.6, 
+        stagger: 0.1,
+        ease: "power2.out" 
+      },
+      "-=0.3"
+    );
+
+    // Insights section
+    tl.fromTo(insightsRef.current, 
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.2"
+    );
+
+  }, { dependencies: [objectives.length, timeRange] });
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div ref={containerRef} className="container mx-auto px-4 py-8">
       {/* Time Range Selector */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
+        ref={timeRangeRef}
         className="mb-8 flex justify-center"
       >
         <div className="inline-flex items-center bg-muted rounded-lg p-1">
@@ -132,15 +243,11 @@ export default function AnalyticsPage() {
             Quarter
           </Button>
         </div>
-      </motion.div>
+      </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border rounded-xl p-6"
-        >
+      <div ref={metricsRef} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="metric-card bg-card border rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Target className="w-5 h-5 text-primary" />
@@ -148,14 +255,9 @@ export default function AnalyticsPage() {
             <span className="text-2xl font-bold">{stats?.total || 0}</span>
           </div>
           <p className="text-sm text-muted-foreground">Total Objectives</p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card border rounded-xl p-6"
-        >
+        <div className="metric-card bg-card border rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="p-2 bg-green-500/10 rounded-lg">
               <TrendingUp className="w-5 h-5 text-green-500" />
@@ -163,14 +265,9 @@ export default function AnalyticsPage() {
             <span className="text-2xl font-bold">{productivityScore}%</span>
           </div>
           <p className="text-sm text-muted-foreground">Productivity Score</p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border rounded-xl p-6"
-        >
+        <div className="metric-card bg-card border rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="p-2 bg-blue-500/10 rounded-lg">
               <Activity className="w-5 h-5 text-blue-500" />
@@ -178,14 +275,9 @@ export default function AnalyticsPage() {
             <span className="text-2xl font-bold">{completedThisMonth}</span>
           </div>
           <p className="text-sm text-muted-foreground">Completed This Month</p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-card border rounded-xl p-6"
-        >
+        <div className="metric-card bg-card border rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="p-2 bg-purple-500/10 rounded-lg">
               <Clock className="w-5 h-5 text-purple-500" />
@@ -193,18 +285,13 @@ export default function AnalyticsPage() {
             <span className="text-2xl font-bold">{avgCompletionTime.toFixed(1)}d</span>
           </div>
           <p className="text-sm text-muted-foreground">Avg Completion Time</p>
-        </motion.div>
+        </div>
       </div>
 
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div ref={chartsRef} className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Weekly Activity Chart */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-card border rounded-xl p-6"
-        >
+        <div className="chart-weekly bg-card border rounded-xl p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <BarChart3 className="w-5 h-5 mr-2" />
             Weekly Activity
@@ -212,40 +299,32 @@ export default function AnalyticsPage() {
           
           <div className="space-y-4">
             {weeklyActivity.map((day, index) => (
-              <motion.div
+              <div
                 key={day.day}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 + index * 0.05 }}
+                className="activity-bar"
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium w-12">{day.day}</span>
                   <div className="flex-1 mx-4 flex items-center space-x-2">
                     {/* Created */}
                     <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden relative">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(day.created / maxActivity) * 100}%` }}
-                        transition={{ delay: 0.6 + index * 0.05, duration: 0.5 }}
-                        className="h-full bg-blue-500 absolute"
+                      <div
+                        className="progress-bar h-full bg-blue-500 absolute"
+                        style={{ "--target-width": `${(day.created / maxActivity) * 100}%` } as React.CSSProperties}
                       />
                     </div>
                     {/* Completed */}
                     <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden relative">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(day.completed / maxActivity) * 100}%` }}
-                        transition={{ delay: 0.7 + index * 0.05, duration: 0.5 }}
-                        className="h-full bg-green-500 absolute"
+                      <div
+                        className="progress-bar h-full bg-green-500 absolute"
+                        style={{ "--target-width": `${(day.completed / maxActivity) * 100}%` } as React.CSSProperties}
                       />
                     </div>
                     {/* Active */}
                     <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden relative">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(day.active / maxActivity) * 100}%` }}
-                        transition={{ delay: 0.8 + index * 0.05, duration: 0.5 }}
-                        className="h-full bg-orange-500 absolute"
+                      <div
+                        className="progress-bar h-full bg-orange-500 absolute"
+                        style={{ "--target-width": `${(day.active / maxActivity) * 100}%` } as React.CSSProperties}
                       />
                     </div>
                   </div>
@@ -255,7 +334,7 @@ export default function AnalyticsPage() {
                     <span className="text-orange-500">{day.active}</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
             
             <div className="flex items-center justify-center space-x-4 mt-4 text-xs">
@@ -273,15 +352,10 @@ export default function AnalyticsPage() {
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Type Distribution */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-card border rounded-xl p-6"
-        >
+        <div className="chart-types bg-card border rounded-xl p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <PieChart className="w-5 h-5 mr-2" />
             Objective Types
@@ -318,13 +392,11 @@ export default function AnalyticsPage() {
                     const largeArcFlag = percentage > 50 ? 1 : 0;
                     
                     return (
-                      <motion.path
+                      <path
                         key={type}
+                        className="pie-path"
                         d={`M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`}
                         fill={colors[type as keyof typeof colors]}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.6 + index * 0.1 }}
                       />
                     );
                   });
@@ -338,10 +410,10 @@ export default function AnalyticsPage() {
               <div key={type} className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className={`w-3 h-3 rounded-full mr-2 ${
-                    type === "ROOT" ? "bg-purple-500" :
-                    type === "SUB_OBJECTIVE" ? "bg-blue-500" :
-                    type === "TASK" ? "bg-green-500" :
-                    "bg-orange-500"
+                                    type === "MAIN_OBJECTIVE" ? "bg-purple-600" :
+                type === "SUB_OBJECTIVE" ? "bg-blue-600" :
+                type === "TASK" ? "bg-green-600" :
+                "bg-orange-600"
                   }`} />
                   <span className="text-sm">{type.replace("_", " ")}</span>
                 </div>
@@ -349,15 +421,13 @@ export default function AnalyticsPage() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* Energy Distribution */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7 }}
-        className="bg-card border rounded-xl p-6"
+      <div
+        ref={energyRef}
+        className="bg-card border rounded-xl p-6 mb-8"
       >
         <h3 className="text-lg font-semibold mb-4 flex items-center">
           <Zap className="w-5 h-5 mr-2" />
@@ -370,11 +440,8 @@ export default function AnalyticsPage() {
             const percentage = total > 0 ? (count / total) * 100 : 0;
             
             return (
-              <motion.div
+              <div
                 key={level}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.8 }}
                 className="text-center"
               >
                 <div className={`
@@ -383,15 +450,13 @@ export default function AnalyticsPage() {
                     level === "MEDIUM" ? "bg-blue-500/10" :
                     "bg-green-500/10"}
                 `}>
-                  <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: `${percentage}%` }}
-                    transition={{ delay: 0.9, duration: 0.5 }}
-                    className={`absolute bottom-0 left-0 right-0 ${
+                  <div
+                    className={`energy-bar absolute bottom-0 left-0 right-0 ${
                       level === "HIGH" ? "bg-red-500/30" :
                       level === "MEDIUM" ? "bg-blue-500/30" :
                       "bg-green-500/30"
                     }`}
+                    style={{ "--target-height": `${percentage}%` } as React.CSSProperties}
                   />
                   <div className="relative z-10">
                     <div className="text-2xl font-bold">{count}</div>
@@ -399,18 +464,16 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <p className="text-sm font-medium mt-2">{level} Energy</p>
-              </motion.div>
+              </div>
             );
           })}
         </div>
-      </motion.div>
+      </div>
 
       {/* Recent Achievements */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.9 }}
-        className="mt-8 bg-gradient-to-br from-primary/10 to-purple-600/10 border border-primary/20 rounded-xl p-6"
+      <div
+        ref={insightsRef}
+        className="bg-gradient-to-br from-primary/10 to-purple-600/10 border border-primary/20 rounded-xl p-6"
       >
         <h3 className="text-lg font-semibold mb-4 flex items-center">
           <Award className="w-5 h-5 mr-2" />
@@ -437,7 +500,7 @@ export default function AnalyticsPage() {
             </p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 } 

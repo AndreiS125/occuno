@@ -119,7 +119,10 @@ class ObjectiveRepository:
                 if obj_data["id"] == str(objective_id):
                     # Update fields - allow adding new fields and updating existing ones
                     for key, value in updates.items():
-                        if value is not None:  # Only update non-None values
+                        # Special handling for fields that should allow None values
+                        nullable_fields = {"parent_id", "description", "due_date", "start_date", "start_time", "end_time", "location"}
+                        
+                        if value is not None or key in nullable_fields:
                             # Handle special conversions
                             if key == "estimated_duration" and hasattr(value, 'total_seconds'):
                                 # Convert timedelta to total seconds for storage
@@ -138,7 +141,7 @@ class ObjectiveRepository:
                     else:
                         updated_obj = Objective(**obj_data)
                     
-                    self.logger.info(f"✅ Updated objective or task: {obj_data['title']} (Type: {obj_data.get('objective_type')})")
+                    self.logger.info(f"✅ Updated objective or task: {obj_data['title']} (Type: {obj_data.get('objective_type')}) - Updated fields: {list(updates.keys())}")
                     return updated_obj
             
             raise ValueError(f"Objective or task with ID {objective_id} not found")

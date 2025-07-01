@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Target, 
@@ -12,7 +12,8 @@ import {
   TrendingUp,
   GitBranch
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
 import { ObjectiveCard } from "@/components/objectives/objective-card";
 import { ObjectiveTree } from "@/components/objectives/objective-tree";
 import { ObjectiveHierarchyDiagram } from "@/components/objectives/objective-hierarchy-diagram";
@@ -28,6 +29,14 @@ export default function ObjectivesPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "tree" | "hierarchy">("tree");
+  const [currentContent, setCurrentContent] = useState<"grid" | "tree" | "hierarchy">("tree");
+  
+  // Refs for GSAP animations
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filtersRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const { data: objectives = [], refetch } = useQuery({
     queryKey: ['objectives', filterType, filterStatus],
@@ -91,57 +100,137 @@ export default function ObjectivesPage() {
     CANCELLED: "bg-gray-400"
   };
 
+  // Handle view mode changes with GSAP transitions
+  const handleViewModeChange = (newMode: "grid" | "tree" | "hierarchy") => {
+    if (newMode === viewMode) return;
+    
+    // Animate out current content
+    gsap.to(contentRef.current, {
+      opacity: 0,
+      x: viewMode === "tree" ? -20 : viewMode === "hierarchy" ? 0 : 20,
+      scale: viewMode === "hierarchy" ? 0.95 : 1,
+      duration: 0.15,
+      ease: "power2.in",
+      onComplete: () => {
+        setCurrentContent(newMode);
+        setViewMode(newMode);
+        
+        // Animate in new content
+        gsap.fromTo(contentRef.current, 
+          {
+            opacity: 0,
+            x: newMode === "tree" ? -20 : newMode === "hierarchy" ? 0 : 20,
+            scale: newMode === "hierarchy" ? 0.95 : 1
+          },
+          {
+            opacity: 1,
+            x: 0,
+            scale: 1,
+            duration: 0.15,
+            ease: "power2.out"
+          }
+        );
+        
+        // Animate individual grid items if switching to grid
+        if (newMode === "grid") {
+          gsap.fromTo(".grid-objective-card", 
+            { opacity: 0, y: 20 },
+            { 
+              opacity: 1, 
+              y: 0, 
+              duration: 0.2, 
+              stagger: 0.02,
+              delay: 0.05,
+              ease: "power2.out" 
+            }
+          );
+        }
+      }
+    });
+  };
+
+  // GSAP animations
+  useGSAP(() => {
+    const tl = gsap.timeline();
+    
+    // Filters and stats
+    tl.fromTo(filtersRef.current, 
+      { opacity: 0, y: -20 }, 
+      { opacity: 1, y: 0, duration: 0.25, ease: "power2.out" }
+    );
+
+    // Stats cards with stagger
+    tl.fromTo(".stats-card", 
+      { opacity: 0, y: 20, scale: 0.9 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        scale: 1, 
+        duration: 0.2, 
+        stagger: 0.03,
+        ease: "back.out(1.2)" 
+      },
+      "-=0.15"
+    );
+
+    // Animate progress bar
+    tl.to(".progress-bar-fill", {
+      width: `${stats.avgProgress}%`,
+      duration: 0.3,
+      ease: "power2.out"
+    }, "-=0.1");
+
+    // Controls
+    tl.fromTo(controlsRef.current, 
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.2, ease: "power2.out" },
+      "-=0.15"
+    );
+
+    // Initial content
+    tl.fromTo(contentRef.current,
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.2, ease: "power2.out" },
+      "-=0.1"
+    );
+
+  }, { dependencies: [objectives.length] });
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div ref={containerRef} className="container mx-auto px-4 py-8">
       {/* Filters and Search */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
+        ref={filtersRef}
         className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center"
       >
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {/* Total Objectives */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card border rounded-xl p-4"
-          >
+          <div className="stats-card bg-card border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <Target className="w-5 h-5 text-muted-foreground" />
               <span className="text-2xl font-bold">{stats.total}</span>
             </div>
             <p className="text-sm text-muted-foreground">Total Objectives</p>
-          </motion.div>
+          </div>
 
           {/* Average Progress */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-card border rounded-xl p-4"
-          >
+          <div className="stats-card bg-card border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <TrendingUp className="w-5 h-5 text-muted-foreground" />
               <span className="text-2xl font-bold">{stats.avgProgress}%</span>
             </div>
             <p className="text-sm text-muted-foreground">Average Progress</p>
             <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.avgProgress}%` }}
-                className="h-full bg-primary"
+              <div
+                className="progress-bar-fill h-full bg-primary"
+                style={{ width: '0%' }}
               />
             </div>
-          </motion.div>
+          </div>
 
           {/* Type Distribution */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-card border rounded-xl p-4"
-          >
+          <div className="stats-card bg-card border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <PieChart className="w-5 h-5 text-muted-foreground" />
               <span className="text-sm font-medium">Types</span>
@@ -157,15 +246,10 @@ export default function ObjectivesPage() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
 
           {/* Status Distribution */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-card border rounded-xl p-4"
-          >
+          <div className="stats-card bg-card border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <BarChart3 className="w-5 h-5 text-muted-foreground" />
               <span className="text-sm font-medium">Status</span>
@@ -181,18 +265,18 @@ export default function ObjectivesPage() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
         </div>
 
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div ref={controlsRef} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center space-x-4">
             {/* View Mode Toggle */}
             <div className="flex items-center bg-muted rounded-lg p-1">
               <Button
                 size="sm"
                 variant={viewMode === "tree" ? "default" : "ghost"}
-                onClick={() => setViewMode("tree")}
+                onClick={() => handleViewModeChange("tree")}
                 className="gap-2"
               >
                 <TreePine className="w-4 h-4" />
@@ -201,7 +285,7 @@ export default function ObjectivesPage() {
               <Button
                 size="sm"
                 variant={viewMode === "hierarchy" ? "default" : "ghost"}
-                onClick={() => setViewMode("hierarchy")}
+                onClick={() => handleViewModeChange("hierarchy")}
                 className="gap-2"
               >
                 <GitBranch className="w-4 h-4" />
@@ -210,7 +294,7 @@ export default function ObjectivesPage() {
               <Button
                 size="sm"
                 variant={viewMode === "grid" ? "default" : "ghost"}
-                onClick={() => setViewMode("grid")}
+                onClick={() => handleViewModeChange("grid")}
                 className="gap-2"
               >
                 <Grid3X3 className="w-4 h-4" />
@@ -249,59 +333,45 @@ export default function ObjectivesPage() {
             </Select>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Content */}
-      <AnimatePresence mode="wait">
-        {viewMode === "tree" ? (
-          <motion.div
-            key="tree"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-          >
-            <ObjectiveTree
+      <div ref={contentRef}>
+        {currentContent === "tree" && (
+          <ObjectiveTree
+            objectives={objectives}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            onRefresh={refetch}
+          />
+        )}
+        {currentContent === "hierarchy" && (
+          <div className="bg-card border rounded-xl">
+            <ObjectiveHierarchyDiagram 
               objectives={objectives}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
               onRefresh={refetch}
             />
-          </motion.div>
-        ) : viewMode === "hierarchy" ? (
-          <motion.div
-            key="hierarchy"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-card border rounded-xl"
-          >
-            <ObjectiveHierarchyDiagram objectives={objectives} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="grid"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          >
+          </div>
+        )}
+        {currentContent === "grid" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {objectives.map((objective, index) => (
-              <motion.div
+              <div
                 key={objective.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                className="grid-objective-card"
               >
                 <ObjectiveCard
                   objective={objective}
                   onUpdate={handleUpdate}
                   onDelete={handleDelete}
                 />
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
       {/* Empty State */}
       {objectives.length === 0 && (

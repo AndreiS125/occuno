@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
 import { 
   Trophy,
   Star,
@@ -76,6 +77,12 @@ const achievementDefinitions = [
 export default function AchievementsPage() {
   const [userStats, setUserStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Refs for GSAP animations
+  const containerRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+  const achievementsRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchUserStats();
@@ -101,6 +108,58 @@ export default function AchievementsPage() {
     return unlockedAchievements.some((a: any) => a.achievement_id === achievementId);
   };
 
+  // GSAP animations
+  useGSAP(() => {
+    if (loading) return;
+
+    const tl = gsap.timeline();
+    
+    // Stats cards animation with stagger
+    tl.fromTo(".stat-card", 
+      { opacity: 0, y: 20, scale: 0.9 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        scale: 1, 
+        duration: 0.5, 
+        stagger: 0.1,
+        ease: "back.out(1.2)" 
+      }
+    );
+
+    // Achievement cards with stagger
+    tl.fromTo(".achievement-card",
+      { opacity: 0, scale: 0.9 },
+      { 
+        opacity: 1, 
+        scale: 1, 
+        duration: 0.5, 
+        stagger: 0.05,
+        ease: "back.out(1.2)" 
+      },
+      "-=0.3"
+    );
+
+    // Progress section
+    tl.fromTo(progressRef.current,
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" },
+      "-=0.2"
+    );
+
+    // Hover animations for unlocked achievements
+    const unlockedCards = document.querySelectorAll(".achievement-card.unlocked");
+    unlockedCards.forEach(card => {
+      card.addEventListener("mouseenter", () => {
+        gsap.to(card, { scale: 1.02, duration: 0.2, ease: "power2.out" });
+      });
+      card.addEventListener("mouseleave", () => {
+        gsap.to(card, { scale: 1, duration: 0.2, ease: "power2.out" });
+      });
+    });
+
+  }, { dependencies: [loading, unlockedAchievements.length] });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -110,57 +169,40 @@ export default function AchievementsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div ref={containerRef} className="container mx-auto px-4 py-8">
       {/* Stats Overview */}
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-xl p-6 text-center"
-        >
+      <div ref={statsRef} className="grid md:grid-cols-3 gap-4 mb-8">
+        <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
           <Award className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
           <p className="text-3xl font-bold mb-1">{totalScore}</p>
           <p className="text-muted-foreground">Total Points</p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card border border-border rounded-xl p-6 text-center"
-        >
+        <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
           <Zap className="w-12 h-12 text-orange-500 mx-auto mb-2" />
           <p className="text-3xl font-bold mb-1">{currentStreak}</p>
           <p className="text-muted-foreground">Day Streak</p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-xl p-6 text-center"
-        >
+        <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
           <Trophy className="w-12 h-12 text-purple-500 mx-auto mb-2" />
           <p className="text-3xl font-bold mb-1">
             {unlockedAchievements.length}/{achievementDefinitions.length}
           </p>
           <p className="text-muted-foreground">Achievements</p>
-        </motion.div>
+        </div>
       </div>
 
       {/* Achievements Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div ref={achievementsRef} className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {achievementDefinitions.map((achievement, index) => {
           const unlocked = isUnlocked(achievement.id);
           
           return (
-            <motion.div
+            <div
               key={achievement.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
-              whileHover={unlocked ? { scale: 1.02 } : {}}
               className={`
+                achievement-card ${unlocked ? 'unlocked' : ''}
                 relative overflow-hidden rounded-xl p-6 transition-all
                 ${unlocked 
                   ? "bg-card border-2 border-primary" 
@@ -202,16 +244,14 @@ export default function AchievementsPage() {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
 
       {/* Progress Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
+      <div
+        ref={progressRef}
         className="mt-12 bg-card border border-border rounded-xl p-8 text-center"
       >
         <h2 className="text-2xl font-bold mb-4">Keep Going!</h2>
@@ -227,7 +267,7 @@ export default function AchievementsPage() {
           <Star className="w-5 h-5 text-muted-foreground" />
           <Star className="w-5 h-5 text-muted-foreground" />
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 } 

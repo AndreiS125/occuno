@@ -4,70 +4,70 @@
 
 @layer base {
   :root {
-    /* High-tech color scheme with cyberpunk vibes */
+    /* High-tech color scheme with cyberpunk vibes - IMPROVED CONTRAST */
     --background: 220 27% 8%;  /* Deep dark blue-black */
     --foreground: 210 100% 98%;
-    --card: 220 27% 10%;  /* Slightly lighter than background */
+    --card: 220 27% 12%;  /* More contrast from background */
     --card-foreground: 210 100% 98%;
-    --popover: 220 27% 12%;
+    --popover: 220 27% 14%;  /* Lighter for better visibility */
     --popover-foreground: 210 100% 98%;
-    --primary: 173 80% 45%;  /* Cyan tech blue */
+    --primary: 173 80% 50%;  /* Slightly brighter cyan */
     --primary-foreground: 220 27% 8%;
-    --secondary: 262 83% 58%;  /* Electric purple */
+    --secondary: 262 83% 65%;  /* Brighter electric purple */
     --secondary-foreground: 220 27% 8%;
-    --muted: 220 27% 15%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 173 80% 40%;
+    --muted: 220 27% 20%;  /* Much lighter for better contrast */
+    --muted-foreground: 215 20% 72%;  /* Higher contrast text */
+    --accent: 173 80% 45%;  /* Slightly brighter accent */
     --accent-foreground: 220 27% 8%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 65%;  /* Brighter red */
     --destructive-foreground: 210 100% 98%;
-    --border: 220 27% 18%;
-    --input: 220 27% 12%;
-    --ring: 173 80% 45%;
+    --border: 220 27% 25%;  /* Much more visible borders */
+    --input: 220 27% 15%;  /* Better input contrast */
+    --ring: 173 80% 50%;  /* Brighter focus rings */
     --radius: 1rem;
     
-    /* Glass morphism variables */
-    --glass-bg: rgba(20, 25, 40, 0.8);
-    --glass-border: rgba(59, 130, 246, 0.3);
-    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    /* Glass morphism variables - enhanced */
+    --glass-bg: rgba(20, 25, 40, 0.9);  /* Less transparent */
+    --glass-border: rgba(59, 130, 246, 0.4);  /* More visible border */
+    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);  /* Stronger shadow */
     
-    /* Glow effects */
-    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.4);
-    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.4);
-    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.3);
+    /* Glow effects - enhanced */
+    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.5);  /* Stronger glow */
+    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.5);
+    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.4);
   }
 
   .light {
-    /* Light mode with premium feel */
+    /* Light mode with premium feel - improved contrast */
     --background: 0 0% 100%;
     --foreground: 220 27% 8%;
-    --card: 0 0% 100%;
+    --card: 0 0% 98%;  /* Slight tint for better separation */
     --card-foreground: 220 27% 8%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 27% 8%;
-    --primary: 173 80% 35%;
+    --primary: 173 80% 40%;  /* Darker for better contrast on light */
     --primary-foreground: 0 0% 100%;
-    --secondary: 262 83% 48%;
+    --secondary: 262 83% 55%;  /* Adjusted for light mode */
     --secondary-foreground: 0 0% 100%;
-    --muted: 220 13% 96%;
-    --muted-foreground: 220 13% 45%;
-    --accent: 173 80% 35%;
+    --muted: 220 13% 92%;  /* Better contrast */
+    --muted-foreground: 220 13% 40%;  /* Darker text for readability */
+    --accent: 173 80% 40%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 55%;  /* Better contrast */
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 96%;
-    --ring: 173 80% 35%;
+    --border: 220 13% 85%;  /* More visible borders */
+    --input: 220 13% 94%;  /* Better input visibility */
+    --ring: 173 80% 40%;
     
-    /* Light mode glass */
-    --glass-bg: rgba(255, 255, 255, 0.9);
-    --glass-border: rgba(59, 130, 246, 0.2);
-    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    /* Light mode glass - enhanced */
+    --glass-bg: rgba(255, 255, 255, 0.95);  /* Less transparent */
+    --glass-border: rgba(59, 130, 246, 0.3);  /* More visible */
+    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);  /* Stronger shadow */
     
     /* Light mode glows */
-    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.3);
-    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.3);
-    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.2);
+    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.4);
+    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.4);
+    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.3);
   }
 }
 
@@ -113,6 +113,115 @@
 ::-webkit-scrollbar-thumb:hover {
   box-shadow: var(--glow-secondary);
   transform: scale(1.1);
+}
+
+/* RANGE SLIDER FIXES - Allow sliders to reach absolute edges */
+.slider-full-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: hsl(var(--muted));
+  height: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  outline: none;
+}
+
+/* Webkit Range Slider */
+.slider-full-range::-webkit-slider-track {
+  background: hsl(var(--muted));
+  height: 8px;
+  border-radius: 4px;
+  border: none;
+  outline: none;
+}
+
+.slider-full-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-top: -6px; /* Center the thumb */
+}
+
+.slider-full-range::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: var(--glow-primary), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.slider-full-range:focus::-webkit-slider-thumb {
+  box-shadow: var(--glow-primary), 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+}
+
+/* Firefox Range Slider */
+.slider-full-range::-moz-range-track {
+  background: hsl(var(--muted));
+  height: 8px;
+  border-radius: 4px;
+  border: none;
+  outline: none;
+}
+
+.slider-full-range::-moz-range-thumb {
+  border: 2px solid hsl(var(--background));
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.slider-full-range::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: var(--glow-primary), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* DROPDOWN/SELECT FIXES - Prevent page scrollbar interference */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+  position: fixed !important;
+}
+
+[data-radix-select-content] {
+  z-index: 9999 !important;
+  position: fixed !important;
+  max-height: 256px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Fix Radix Select viewport to prevent page scroll interference */
+[data-radix-select-viewport] {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: 240px !important;
+}
+
+/* Ensure Select trigger doesn't interfere with scrolling */
+[data-radix-select-trigger] {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Prevent body scroll when dropdown is open (optional, can be removed if not desired) */
+body:has([data-radix-select-content][data-state="open"]) {
+  overflow: hidden;
+}
+
+/* Remove the body scroll lock if it causes issues */
+@media (max-width: 768px) {
+  body:has([data-radix-select-content][data-state="open"]) {
+    overflow: auto;
+  }
 }
 
 /* Glass morphism base class */
@@ -409,6 +518,36 @@
   transition: none !important;
 }
 
+/* Gantt chart specific fixes for proper bar positioning */
+.gantt-chart .absolute {
+  /* Ensure bars stay within their containers */
+  overflow: hidden;
+}
+
+/* Gantt chart bars should be properly contained */
+.gantt-chart [style*="position: absolute"] {
+  /* Prevent overflow beyond container bounds */
+  max-width: calc(100% - 2px);
+  box-sizing: border-box;
+}
+
+/* Ensure grid cells are properly defined */
+.gantt-chart .h-\[50px\] {
+  position: relative;
+  overflow: hidden; /* Prevent bars from spilling outside row bounds */
+}
+
+/* Grid alignment fixes */
+.gantt-chart .flex-shrink-0 {
+  border-right: 1px solid hsl(var(--border));
+  box-sizing: border-box;
+}
+
+/* Task bar positioning fixes */
+.gantt-chart .group {
+  contain: layout; /* Contain positioning context */
+}
+
 /* Drag and drop preservation */
 [draggable="true"] {
   /* Ensure draggable elements work properly */
@@ -454,4 +593,38 @@
 .gantt-chart .cursor-w-resize,
 .gantt-chart .cursor-e-resize {
   transition: background-color 0.2s ease !important;
+}
+
+/* GSAP animation performance optimizations */
+.hover-card {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.stat-card,
+.quick-action-card {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  transform: translateZ(0);
+}
+
+.float-accent {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Smooth hardware acceleration for all dashboard animations */
+.action-icon,
+.action-arrow,
+.progress-bar {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+/* Enable GPU acceleration for better performance */
+.dashboard-section {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 } 

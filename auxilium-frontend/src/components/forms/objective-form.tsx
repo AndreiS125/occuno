@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Range } from "@/components/ui/range";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Clock, CalendarIcon, Battery, BatteryLow, Zap } from "lucide-react";
+import { Clock, CalendarIcon, Battery, BatteryLow, Zap, Trash2 } from "lucide-react";
 import { Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel } from "@/types";
 import { objectivesApi } from "@/lib/api";
 import { 
@@ -37,6 +38,7 @@ interface ObjectiveFormData {
   end_time: string;
   start_date: string;
   due_date: string;
+  all_day: boolean;
   location?: string;
   is_recurring: boolean;
   status: ObjectiveStatus;
@@ -54,6 +56,7 @@ interface ObjectiveFormProps {
   initialData?: Partial<Objective | Task>;
   onSubmit: (data: any) => Promise<void>;
   onCancel: () => void;
+  onDelete?: (id: string) => Promise<void>;
   parentId?: string;
   showTimeFields?: boolean;
   defaultToTask?: boolean;
@@ -64,6 +67,7 @@ export function ObjectiveForm({
   initialData,
   onSubmit,
   onCancel,
+  onDelete,
   parentId,
   showTimeFields = true,
   defaultToTask = true,
@@ -71,6 +75,7 @@ export function ObjectiveForm({
 }: ObjectiveFormProps) {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<ObjectiveFormData>(() => {
@@ -83,12 +88,8 @@ export function ObjectiveForm({
       console.log("🔧 Form initialization - initialData:", {
         id: data.id,
         type: data.objective_type,
-        start_time: data.start_time,
-        end_time: data.end_time,
         start_date: data.start_date,
         due_date: data.due_date,
-        hasStartTime: !!data.start_time,
-        hasEndTime: !!data.end_time,
       });
       
       return {
@@ -99,16 +100,11 @@ export function ObjectiveForm({
         priority_score: data.priority_score ?? 0.5,
         complexity_score: data.complexity_score ?? 0.5,
         parent_id: data.parent_id || parentId || null,
-        start_time: data.start_time 
-          ? formatDateTimeLocal(new Date(data.start_time)) 
-          : (data.start_date && data.objective_type === ObjectiveType.TASK)
-            ? formatDateTimeLocal(new Date(data.start_date))
-            : "",
-        end_time: data.end_time 
-          ? formatDateTimeLocal(new Date(data.end_time)) 
-          : (data.due_date && data.objective_type === ObjectiveType.TASK)
-            ? formatDateTimeLocal(new Date(data.due_date))
-            : "",
+        // FIXED: Prioritize explicit start_time/end_time fields from calendar selection
+        start_time: data.start_time || 
+          (data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : ""),
+        end_time: data.end_time || 
+          (data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : ""),
         start_date: data.start_date ? formatDateOnly(new Date(data.start_date)) : "",
         due_date: data.due_date ? formatDateOnly(new Date(data.due_date)) : "",
         location: data.location || "",
@@ -128,9 +124,11 @@ export function ObjectiveForm({
           time_of_day: "",
           end_date: "",
         },
+        all_day: data.all_day || false,
       };
     }
     
+    // Default form state
     return {
       title: "",
       description: "",
@@ -154,6 +152,7 @@ export function ObjectiveForm({
         time_of_day: "",
         end_date: "",
       },
+      all_day: false,
     };
   });
 
@@ -163,15 +162,6 @@ export function ObjectiveForm({
       const data = initialData as any;
       const objRecurring = data.recurring;
       
-      console.log("🔄 Form update - initialData changed:", {
-        id: data.id,
-        type: data.objective_type,
-        start_time: data.start_time,
-        end_time: data.end_time,
-        hasStartTime: !!data.start_time,
-        hasEndTime: !!data.end_time,
-      });
-      
       setFormData({
         title: data.title || "",
         description: data.description || "",
@@ -180,16 +170,11 @@ export function ObjectiveForm({
         priority_score: data.priority_score ?? 0.5,
         complexity_score: data.complexity_score ?? 0.5,
         parent_id: data.parent_id || parentId || null,
-        start_time: data.start_time 
-          ? formatDateTimeLocal(new Date(data.start_time)) 
-          : (data.start_date && data.objective_type === ObjectiveType.TASK)
-            ? formatDateTimeLocal(new Date(data.start_date))
-            : "",
-        end_time: data.end_time 
-          ? formatDateTimeLocal(new Date(data.end_time)) 
-          : (data.due_date && data.objective_type === ObjectiveType.TASK)
-            ? formatDateTimeLocal(new Date(data.due_date))
-            : "",
+        // FIXED: Prioritize explicit start_time/end_time fields from calendar selection
+        start_time: data.start_time || 
+          (data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : ""),
+        end_time: data.end_time || 
+          (data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : ""),
         start_date: data.start_date ? formatDateOnly(new Date(data.start_date)) : "",
         due_date: data.due_date ? formatDateOnly(new Date(data.due_date)) : "",
         location: data.location || "",
@@ -209,6 +194,7 @@ export function ObjectiveForm({
           time_of_day: "",
           end_date: "",
         },
+        all_day: data.all_day || false,
       });
     }
   }, [initialData, defaultToTask, parentId]);
@@ -237,10 +223,10 @@ export function ObjectiveForm({
         throw new Error("Title is required");
       }
 
-      // For tasks, time is required
+      // For tasks, time is required unless it's an all-day event
       if (formData.objective_type === ObjectiveType.TASK) {
-        if (showTimeFields && (!formData.start_time || !formData.end_time)) {
-          throw new Error("Start time and end time are required for tasks");
+        if (showTimeFields && !formData.all_day && (!formData.start_time || !formData.end_time)) {
+          throw new Error("Start time and end time are required for timed tasks");
         }
       }
 
@@ -255,33 +241,39 @@ export function ObjectiveForm({
         parent_id: formData.parent_id || undefined,
         status: formData.status,
         completion_percentage: formData.completion_percentage,
+        all_day: formData.all_day,  // Explicit all-day flag
       };
 
-      // Handle dates and times based on type and availability
-      if (formData.objective_type === ObjectiveType.TASK && showTimeFields) {
-        if (formData.start_time && formData.end_time) {
-          // Use datetime for tasks
-          submitData.start_time = parseLocalDateTimeToISO(formData.start_time);
-          submitData.end_time = parseLocalDateTimeToISO(formData.end_time);
-          submitData.start_date = submitData.start_time;
-          submitData.due_date = submitData.end_time;
-        } else if (formData.start_date && formData.due_date) {
-          // Fallback to date-only
-          submitData.start_date = parseDateOnlyToISO(formData.start_date);
-          submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
-        }
-        
-        if (formData.location) {
-          submitData.location = formData.location;
-        }
-      } else {
-        // For non-task objectives
+      // SIMPLIFIED DATE/TIME HANDLING: Use all_day field to determine format
+      if (formData.all_day) {
+        // All-day event - use date-only format with midnight times
         if (formData.start_date) {
           submitData.start_date = parseDateOnlyToISO(formData.start_date);
         }
         if (formData.due_date) {
           submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
         }
+      } else if (showTimeFields && (formData.start_time || formData.end_time)) {
+        // Timed event - use datetime format
+        if (formData.start_time) {
+          submitData.start_date = parseLocalDateTimeToISO(formData.start_time);
+        }
+        if (formData.end_time) {
+          submitData.due_date = parseLocalDateTimeToISO(formData.end_time);
+        }
+      } else {
+        // Fallback to date-only for non-timed events
+        if (formData.start_date) {
+          submitData.start_date = parseDateOnlyToISO(formData.start_date);
+        }
+        if (formData.due_date) {
+          submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
+        }
+      }
+      
+      // Add task-specific fields if it's a task
+      if (formData.objective_type === ObjectiveType.TASK && formData.location) {
+        submitData.location = formData.location;
       }
 
       // Add recurrence data if enabled
@@ -292,23 +284,43 @@ export function ObjectiveForm({
           days_of_week: formData.recurring.days_of_week,
           time_of_day: formData.start_time ? 
             new Date(parseLocalDateTimeToISO(formData.start_time)).toTimeString().slice(0, 5) : 
-            undefined,
+            formData.recurring.time_of_day || "09:00",
           end_date: formData.recurring.end_date || undefined,
         };
       }
 
+      console.log("📝 Submitting data:", submitData);
+
       await onSubmit(submitData);
     } catch (err: any) {
       setError(err.message || "An error occurred");
+    } finally {
+      // FIXED: Always reset loading state, whether success or failure
       setLoading(false);
     }
   };
 
-  const isTask = formData.objective_type === ObjectiveType.TASK;
-  const showDateTimeFields = isTask && showTimeFields;
+  const handleDelete = async () => {
+    if (!initialData?.id || !onDelete) return;
+    
+    const confirmed = window.confirm("Are you sure you want to delete this objective?");
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await onDelete(initialData.id);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete objective");
+    }
+    setDeleting(false);
+  };
+
+  const isEdit = !!initialData?.id;
+  const showDateTimeFields = showTimeFields && formData.objective_type === ObjectiveType.TASK;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 p-6">
+      {/* Error Display */}
       {error && (
         <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg">
           {error}
@@ -339,35 +351,12 @@ export function ObjectiveForm({
         />
       </div>
 
-      {/* Parent Objective */}
+      {/* Type */}
       <div>
-        <Label htmlFor="parent">Parent Objective (Optional)</Label>
-        <Select
-          value={formData.parent_id || "none"}
-          onValueChange={(value) =>
-            setFormData({ ...formData, parent_id: value === "none" ? null : value })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select parent objective" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No Parent (Root Level)</SelectItem>
-            {objectives.map((obj) => (
-              <SelectItem key={obj.id} value={obj.id}>
-                {obj.title} ({obj.objective_type.replace("_", " ")})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Objective Type */}
-      <div>
-        <Label htmlFor="type">Objective Type</Label>
+        <Label>Type</Label>
         <Select
           value={formData.objective_type}
-          onValueChange={(value: ObjectiveType) =>
+          onValueChange={(value: ObjectiveType) => 
             setFormData({ ...formData, objective_type: value })
           }
         >
@@ -375,22 +364,50 @@ export function ObjectiveForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {!parentId && (
-              <SelectItem value={ObjectiveType.MAIN_OBJECTIVE}>Main Objective</SelectItem>
-            )}
-            <SelectItem value={ObjectiveType.SUB_OBJECTIVE}>Sub Objective</SelectItem>
+            <SelectItem value={ObjectiveType.MAIN_OBJECTIVE}>Main Objective</SelectItem>
+            <SelectItem value={ObjectiveType.SUB_OBJECTIVE}>Sub-Objective</SelectItem>
             <SelectItem value={ObjectiveType.TASK}>Task</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          {isTask 
-            ? "Tasks are specific actions with defined time periods" 
-            : "Objectives are goals that can contain sub-objectives and tasks"}
-        </p>
+      </div>
+
+      {/* Parent */}
+      {objectives.length > 0 && (
+        <div>
+          <Label>Parent Objective</Label>
+          <Select
+            value={formData.parent_id || "none"}
+            onValueChange={(value) => 
+              setFormData({ ...formData, parent_id: value === "none" ? null : value })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No Parent</SelectItem>
+              {objectives.map((obj) => (
+                <SelectItem key={obj.id} value={obj.id}>
+                  {obj.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* All-Day Toggle */}
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="all-day"
+          checked={formData.all_day}
+          onCheckedChange={(checked) => setFormData({ ...formData, all_day: checked })}
+        />
+        <Label htmlFor="all-day">All-day event</Label>
       </div>
 
       {/* Date/Time Fields */}
-      {showDateTimeFields ? (
+      {showDateTimeFields && !formData.all_day ? (
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label className="flex items-center gap-2">
@@ -444,13 +461,26 @@ export function ObjectiveForm({
         </div>
       )}
 
+      {/* Location (Tasks only) */}
+      {formData.objective_type === ObjectiveType.TASK && (
+        <div>
+          <Label htmlFor="location">Location</Label>
+          <Input
+            id="location"
+            value={formData.location}
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            placeholder="Enter location (optional)"
+          />
+        </div>
+      )}
+
       {/* Energy and Priority */}
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label>Energy Level</Label>
           <Select
             value={formData.energy_requirement}
-            onValueChange={(value: EnergyLevel) =>
+            onValueChange={(value: EnergyLevel) => 
               setFormData({ ...formData, energy_requirement: value })
             }
           >
@@ -466,165 +496,114 @@ export function ObjectiveForm({
               </SelectItem>
               <SelectItem value={EnergyLevel.MEDIUM}>
                 <div className="flex items-center gap-2">
-                  <Battery className="w-4 h-4 text-blue-500" />
+                  <Battery className="w-4 h-4 text-yellow-500" />
                   Medium
                 </div>
               </SelectItem>
               <SelectItem value={EnergyLevel.HIGH}>
                 <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-yellow-500" />
+                  <Zap className="w-4 h-4 text-red-500" />
                   High
                 </div>
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
-        
+
         <div>
           <Label>Priority ({Math.round(formData.priority_score * 100)}%)</Label>
-          <Input
+          <input
             type="range"
-            min="0"
-            max="1"
-            step="0.1"
+            min={0}
+            max={1}
+            step={0.1}
             value={formData.priority_score}
             onChange={(e) => 
               setFormData({ ...formData, priority_score: parseFloat(e.target.value) })
             }
+            className="w-full"
           />
         </div>
 
         <div>
           <Label>Complexity ({Math.round(formData.complexity_score * 100)}%)</Label>
-          <Input
+          <input
             type="range"
-            min="0"
-            max="1"
-            step="0.1"
+            min={0}
+            max={1}
+            step={0.1}
             value={formData.complexity_score}
             onChange={(e) => 
               setFormData({ ...formData, complexity_score: parseFloat(e.target.value) })
             }
+            className="w-full"
           />
         </div>
       </div>
 
-      {/* Status and Progress */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label>Status</Label>
-          <Select
-            value={formData.status}
-            onValueChange={(value: ObjectiveStatus) =>
-              setFormData({ ...formData, status: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ObjectiveStatus.NOT_STARTED}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-gray-500" />
-                  Not Started
-                </div>
-              </SelectItem>
-              <SelectItem value={ObjectiveStatus.IN_PROGRESS}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  In Progress
-                </div>
-              </SelectItem>
-              <SelectItem value={ObjectiveStatus.COMPLETED}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  Completed
-                </div>
-              </SelectItem>
-              <SelectItem value={ObjectiveStatus.BLOCKED}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                  Blocked
-                </div>
-              </SelectItem>
-              <SelectItem value={ObjectiveStatus.CANCELLED}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-gray-400" />
-                  Cancelled
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Status (edit mode only) */}
+      {isEdit && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Status</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value: ObjectiveStatus) => 
+                setFormData({ ...formData, status: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ObjectiveStatus.NOT_STARTED}>Not Started</SelectItem>
+                <SelectItem value={ObjectiveStatus.IN_PROGRESS}>In Progress</SelectItem>
+                <SelectItem value={ObjectiveStatus.BLOCKED}>Blocked</SelectItem>
+                <SelectItem value={ObjectiveStatus.COMPLETED}>Completed</SelectItem>
+                <SelectItem value={ObjectiveStatus.CANCELLED}>Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div>
-          <Label>Completion ({formData.completion_percentage}%)</Label>
-          <Input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={formData.completion_percentage}
-            onChange={(e) => {
-              const percentage = parseInt(e.target.value);
-              setFormData({ 
-                ...formData, 
-                completion_percentage: percentage,
-                // Auto-update status based on completion
-                status: percentage === 100 ? ObjectiveStatus.COMPLETED : 
-                        percentage > 0 ? ObjectiveStatus.IN_PROGRESS : 
-                        formData.status
-              });
-            }}
-          />
-          <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${formData.completion_percentage}%` }}
-              className="h-full bg-primary transition-all duration-300"
+          <div>
+            <Label>Completion ({formData.completion_percentage}%)</Label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={formData.completion_percentage}
+              onChange={(e) => {
+                const percentage = parseInt(e.target.value);
+                setFormData({ 
+                  ...formData, 
+                  completion_percentage: percentage
+                });
+              }}
+              className="w-full"
             />
           </div>
-        </div>
-      </div>
-
-      {/* Task-specific fields */}
-      {isTask && (
-        <div>
-          <Label htmlFor="location">Location</Label>
-          <Input
-            id="location"
-            value={formData.location || ""}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-            placeholder="Where will this task take place?"
-          />
         </div>
       )}
 
-      {/* Recurrence (for tasks) */}
-      {isTask && showTimeFields && (
-        <div className="space-y-4 border-t pt-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="recurring">Repeat Task</Label>
-              <p className="text-xs text-muted-foreground">
-                Create recurring tasks with custom patterns
-              </p>
-            </div>
-            <Switch
-              id="recurring"
-              checked={formData.is_recurring}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, is_recurring: checked })
-              }
-            />
-          </div>
-          
-          {formData.is_recurring && (
-            <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-2">
+      {/* Recurring */}
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="recurring"
+            checked={formData.is_recurring}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_recurring: checked })}
+          />
+          <Label htmlFor="recurring">Make this recurring</Label>
+        </div>
+
+        {formData.is_recurring && (
+          <div className="space-y-4 pl-4 border-l-2 border-primary/20">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Frequency</Label>
                 <Select
-                  value={formData.recurring!.frequency}
+                  value={formData.recurring?.frequency}
                   onValueChange={(value: "daily" | "weekly" | "monthly") =>
                     setFormData({
                       ...formData,
@@ -642,77 +621,112 @@ export function ObjectiveForm({
                   </SelectContent>
                 </Select>
               </div>
-              
-              {formData.recurring!.frequency === "weekly" && (
-                <div>
-                  <Label className="mb-2">On these days</Label>
-                  <div className="grid grid-cols-7 gap-2">
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, index) => (
-                      <label
-                        key={day}
-                        className="flex flex-col items-center space-y-1 cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={formData.recurring!.days_of_week.includes(index)}
-                          onCheckedChange={(checked) => {
-                            const days = [...formData.recurring!.days_of_week];
-                            if (checked) {
-                              days.push(index);
-                            } else {
-                              const idx = days.indexOf(index);
-                              if (idx > -1) days.splice(idx, 1);
-                            }
-                            setFormData({
-                              ...formData,
-                              recurring: { ...formData.recurring!, days_of_week: days }
-                            });
-                          }}
-                        />
-                        <span className="text-xs">{day}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
+
               <div>
-                <Label htmlFor="end_date">End Date (Optional)</Label>
+                <Label>Every</Label>
                 <Input
-                  id="end_date"
-                  type="date"
-                  value={formData.recurring!.end_date}
+                  type="number"
+                  min="1"
+                  value={formData.recurring?.interval}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      recurring: { ...formData.recurring!, end_date: e.target.value }
+                      recurring: { ...formData.recurring!, interval: parseInt(e.target.value) || 1 }
                     })
                   }
-                  placeholder="When should this recurrence end?"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Leave empty to repeat indefinitely
-                </p>
               </div>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Form Actions */}
+            {formData.recurring?.frequency === "weekly" && (
+              <div>
+                <Label>Days of Week</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, index) => (
+                    <div key={day} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`day-${index}`}
+                        checked={formData.recurring?.days_of_week.includes(index)}
+                        onCheckedChange={(checked) => {
+                          const daysOfWeek = formData.recurring?.days_of_week || [];
+                          const newDays = checked
+                            ? [...daysOfWeek, index]
+                            : daysOfWeek.filter(d => d !== index);
+                          setFormData({
+                            ...formData,
+                            recurring: { ...formData.recurring!, days_of_week: newDays }
+                          });
+                        }}
+                      />
+                      <Label htmlFor={`day-${index}`} className="text-sm">
+                        {day}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <Label>Time of Day</Label>
+              <Input
+                type="time"
+                value={formData.recurring?.time_of_day}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    recurring: { ...formData.recurring!, time_of_day: e.target.value }
+                  })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>End Date (optional)</Label>
+              <Input
+                type="date"
+                value={formData.recurring?.end_date}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    recurring: { ...formData.recurring!, end_date: e.target.value }
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
       <div className="flex gap-3 pt-4 border-t">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
           className="flex-1"
-          disabled={loading}
+          disabled={loading || deleting}
         >
           Cancel
         </Button>
+        
+        {isEdit && onDelete && (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={loading || deleting}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+        )}
+        
         <Button 
           type="submit"
           className="flex-1"
-          disabled={loading}
+          disabled={loading || deleting}
         >
           {loading ? "Saving..." : submitLabel}
         </Button>

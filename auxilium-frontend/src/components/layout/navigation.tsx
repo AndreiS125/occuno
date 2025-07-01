@@ -17,7 +17,6 @@ import {
   CalendarDays,
   Zap
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { objectivesApi } from "@/lib/api";
 import { ObjectiveModal } from "@/components/modals";
@@ -97,116 +96,60 @@ function Navigation({ calendarViewMode, onCalendarViewChange }: NavigationProps)
 
   return (
     <>
-      <motion.nav 
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
+      <nav 
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 transition-all duration-500",
+          "fixed top-0 left-0 right-0 z-40 h-16 transition-all duration-200 ease-out",
+          // Consistent styling to prevent layout shifts
+          "bg-background/95 backdrop-blur-xl border-b",
           scrolled 
-            ? "glass-nav backdrop-blur-2xl shadow-2xl shadow-primary/10" 
-            : "bg-background/80 backdrop-blur-md border-b border-border/20"
+            ? "border-primary/20 shadow-lg shadow-primary/5" 
+            : "border-border/20"
         )}
       >
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 animate-gradient-shift opacity-50" />
-        
-        <div className="relative container mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo with glow effect */}
+        <div className="container mx-auto px-4 h-full">
+          <div className="flex items-center justify-between h-full">
+            {/* Logo */}
             <Link href="/" className="flex items-center space-x-3 group">
-              <motion.div
-                whileHover={{ rotate: 360, scale: 1.1 }}
-                transition={{ duration: 0.6, ease: "easeInOut" }}
-                className="relative"
-              >
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-secondary opacity-20 animate-pulse-glow" />
-                <Zap className="w-8 h-8 text-primary relative z-10 drop-shadow-glow" />
-              </motion.div>
-              <motion.span 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                className="font-bold text-xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hidden sm:block"
-              >
+              <div className="relative">
+                <Zap className="w-8 h-8 text-primary transition-transform duration-200 group-hover:scale-110" />
+              </div>
+              <span className="font-bold text-xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hidden sm:block">
                 Auxilium
-              </motion.span>
+              </span>
             </Link>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-2">
-              {navItems.map((item, index) => {
+              {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
                 
                 return (
-                  <motion.div
+                  <Link
                     key={item.href}
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-200",
+                      isActive 
+                        ? "bg-primary/20 text-primary border border-primary/30" 
+                        : "hover:bg-muted/50 hover:text-primary"
+                    )}
                   >
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "relative group flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-300 overflow-hidden",
-                        isActive 
-                          ? "glass-card bg-gradient-to-r from-primary/20 to-secondary/20 text-primary shadow-glow border-primary/30" 
-                          : "hover:glass-card hover:bg-muted/50 hover:scale-105"
-                      )}
-                    >
-                      {/* Animated background for active state */}
-                      {isActive && (
-                        <motion.div
-                          layoutId="activeTab"
-                          className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl"
-                          transition={{ duration: 0.3 }}
-                        />
-                      )}
-                      
-                      {/* Icon with individual color and glow */}
-                      <motion.div
-                        whileHover={{ scale: 1.2, rotate: 5 }}
-                        className="relative z-10"
-                      >
-                        <Icon className={cn(
-                          "w-4 h-4 transition-all duration-300",
-                          isActive ? "text-primary drop-shadow-glow" : "group-hover:text-primary"
-                        )} />
-                      </motion.div>
-                      
-                      <span className={cn(
-                        "text-sm font-medium relative z-10 transition-all duration-300",
-                        isActive ? "text-primary" : "group-hover:text-primary"
-                      )}>
-                        {item.label}
-                      </span>
-                      
-                      {/* Hover shimmer effect */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                    </Link>
-                  </motion.div>
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </Link>
                 );
               })}
             </div>
 
-            {/* Calendar View Toggle with futuristic design */}
+            {/* Calendar View Toggle */}
             {isCalendarPage && calendarViewMode && onCalendarViewChange && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="hidden md:flex items-center glass-card rounded-2xl p-1 bg-muted/20 border-primary/20"
-              >
+              <div className="hidden md:flex items-center bg-muted/20 rounded-xl p-1">
                 <Button
                   size="sm"
                   variant={calendarViewMode === "gantt" ? "default" : "ghost"}
                   onClick={() => onCalendarViewChange("gantt")}
-                  className={cn(
-                    "gap-2 transition-all duration-300 rounded-xl",
-                    calendarViewMode === "gantt" 
-                      ? "bg-gradient-to-r from-primary to-secondary text-white shadow-glow" 
-                      : "hover:bg-primary/10 hover:text-primary"
-                  )}
+                  className="gap-2 rounded-lg"
                 >
                   <CalendarRange className="w-4 h-4" />
                   Gantt
@@ -215,149 +158,90 @@ function Navigation({ calendarViewMode, onCalendarViewChange }: NavigationProps)
                   size="sm"
                   variant={calendarViewMode === "calendar" ? "default" : "ghost"}
                   onClick={() => onCalendarViewChange("calendar")}
-                  className={cn(
-                    "gap-2 transition-all duration-300 rounded-xl",
-                    calendarViewMode === "calendar" 
-                      ? "bg-gradient-to-r from-primary to-secondary text-white shadow-glow" 
-                      : "hover:bg-primary/10 hover:text-primary"
-                  )}
+                  className="gap-2 rounded-lg"
                 >
                   <CalendarDays className="w-4 h-4" />
                   Calendar
                 </Button>
-              </motion.div>
+              </div>
             )}
 
             {/* Action Buttons */}
             <div className="flex items-center space-x-3">
-              <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0 0 20px rgba(34, 197, 194, 0.5)" }}
-                whileTap={{ scale: 0.95 }}
+              <button
                 onClick={() => setShowCreateModal(true)}
-                className="relative group btn-glow flex items-center space-x-2 bg-gradient-to-r from-primary to-secondary text-white px-6 py-2 rounded-xl font-medium shadow-glow transition-all duration-300 overflow-hidden"
+                className="flex items-center space-x-2 bg-gradient-to-r from-primary to-secondary text-white px-6 py-2 rounded-xl font-medium transition-all duration-200 hover:scale-105"
               >
-                <motion.div
-                  whileHover={{ rotate: 90 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <Plus className="w-4 h-4" />
-                </motion.div>
-                <span className="hidden sm:inline relative z-10">Create</span>
-                
-                {/* Button shine effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              </motion.button>
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Create</span>
+              </button>
 
-              {/* Mobile menu button with rotation animation */}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+              {/* Mobile menu button */}
+              <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-xl glass-card hover:bg-primary/10 hover:text-primary transition-all duration-300 border-primary/20"
+                className="md:hidden p-2 rounded-xl hover:bg-muted/50 transition-all duration-200"
               >
-                <motion.div
-                  animate={{ rotate: mobileMenuOpen ? 180 : 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                </motion.div>
-              </motion.button>
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
-          {/* Mobile Navigation with advanced animations */}
-          <AnimatePresence>
-            {mobileMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, y: -20 }}
-                animate={{ opacity: 1, height: "auto", y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -20 }}
-                transition={{ duration: 0.4, ease: "easeInOut" }}
-                className="md:hidden py-6 border-t border-border/20 glass-card mt-2 rounded-2xl"
-              >
-                <div className="grid grid-cols-2 gap-3 px-2">
-                  {navItems.map((item, index) => {
-                    const Icon = item.icon;
-                    const isActive = pathname === item.href;
-                    
-                    return (
-                      <motion.div
-                        key={item.href}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <Link
-                          href={item.href}
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={cn(
-                            "relative group flex items-center space-x-2 px-3 py-3 rounded-xl transition-all duration-300 overflow-hidden",
-                            isActive 
-                              ? "glass-card bg-gradient-to-r from-primary/20 to-secondary/20 text-primary border-primary/30" 
-                              : "hover:glass-card hover:bg-muted/50 hover:scale-105"
-                          )}
-                        >
-                          <Icon className={cn(
-                            "w-4 h-4 transition-all duration-300",
-                            isActive ? "text-primary" : "group-hover:text-primary"
-                          )} />
-                          <span className={cn(
-                            "text-sm font-medium transition-all duration-300",
-                            isActive ? "text-primary" : "group-hover:text-primary"
-                          )}>
-                            {item.label}
-                          </span>
-                        </Link>
-                      </motion.div>
-                    );
-                  })}
+          {/* Mobile Navigation */}
+          {mobileMenuOpen && (
+            <div className="md:hidden py-4 border-t border-border/20 mt-4">
+              <div className="grid grid-cols-2 gap-2">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href;
+                  
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex items-center space-x-2 px-3 py-3 rounded-xl transition-all duration-200",
+                        isActive 
+                          ? "bg-primary/20 text-primary" 
+                          : "hover:bg-muted/50"
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+              
+              {/* Mobile Calendar View Toggle */}
+              {isCalendarPage && calendarViewMode && onCalendarViewChange && (
+                <div className="mt-4 pt-4 border-t border-border/20">
+                  <div className="flex items-center bg-muted/20 rounded-xl p-1">
+                    <Button
+                      size="sm"
+                      variant={calendarViewMode === "gantt" ? "default" : "ghost"}
+                      onClick={() => onCalendarViewChange("gantt")}
+                      className="gap-2 flex-1"
+                    >
+                      <CalendarRange className="w-4 h-4" />
+                      Gantt
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={calendarViewMode === "calendar" ? "default" : "ghost"}
+                      onClick={() => onCalendarViewChange("calendar")}
+                      className="gap-2 flex-1"
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      Calendar
+                    </Button>
+                  </div>
                 </div>
-                
-                {/* Mobile Calendar View Toggle */}
-                {isCalendarPage && calendarViewMode && onCalendarViewChange && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="mt-6 pt-4 border-t border-border/20 px-2"
-                  >
-                    <div className="flex items-center glass-card rounded-2xl p-1 bg-muted/20">
-                      <Button
-                        size="sm"
-                        variant={calendarViewMode === "gantt" ? "default" : "ghost"}
-                        onClick={() => onCalendarViewChange("gantt")}
-                        className={cn(
-                          "gap-2 flex-1 rounded-xl transition-all duration-300",
-                          calendarViewMode === "gantt" 
-                            ? "bg-gradient-to-r from-primary to-secondary text-white" 
-                            : "hover:bg-primary/10 hover:text-primary"
-                        )}
-                      >
-                        <CalendarRange className="w-4 h-4" />
-                        Gantt
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={calendarViewMode === "calendar" ? "default" : "ghost"}
-                        onClick={() => onCalendarViewChange("calendar")}
-                        className={cn(
-                          "gap-2 flex-1 rounded-xl transition-all duration-300",
-                          calendarViewMode === "calendar" 
-                            ? "bg-gradient-to-r from-primary to-secondary text-white" 
-                            : "hover:bg-primary/10 hover:text-primary"
-                        )}
-                      >
-                        <CalendarDays className="w-4 h-4" />
-                        Calendar
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </div>
+          )}
         </div>
-      </motion.nav>
+      </nav>
 
       {/* Create Objective Modal */}
       <ObjectiveModal
@@ -365,7 +249,6 @@ function Navigation({ calendarViewMode, onCalendarViewChange }: NavigationProps)
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => {
           setShowCreateModal(false);
-          // Could trigger a refresh if needed
         }}
         defaultToTask={false}
       />
@@ -379,7 +262,6 @@ export function NavigationWrapper() {
   const isCalendarPage = pathname === "/calendar";
   
   if (isCalendarPage) {
-    // On calendar page, connect to context
     const { viewMode, setViewMode } = useCalendarView();
     return (
       <Navigation 
@@ -389,6 +271,5 @@ export function NavigationWrapper() {
     );
   }
   
-  // On other pages, use simple navigation
   return <Navigation />;
 } 
