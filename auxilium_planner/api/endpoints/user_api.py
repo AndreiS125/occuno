@@ -137,4 +137,21 @@ async def check_and_update_streak(
 ):
     """Manually check and update streak status."""
     result = await gamification._update_streak()
-    return result 
+    return result
+
+@router.get("/gamification/achievements")
+async def get_achievement_definitions(
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Get all achievement definitions."""
+    definitions = gamification._achievement_definitions
+    return [
+        {
+            "id": def_.id,
+            "name": def_.name,
+            "description": def_.description,
+            "points_value": def_.points_value,
+            "icon": def_.icon
+        }
+        for def_ in definitions
+    ] 

@@ -5,7 +5,7 @@ import json
 
 from domain.models import (
     UserProfile, UserAchievement, AchievementDefinition,
-    Objective, Task, ObjectiveStatus
+    Objective, Task, ObjectiveStatus, ObjectiveType
 )
 from repositories import UserProfileRepository, ObjectiveRepository
 from core.config import settings
@@ -24,42 +24,49 @@ class GamificationService:
         # In a real app, these would be loaded from a file or database
         return [
             AchievementDefinition(
+                id="first_steps",
                 name="First Steps",
                 description="Complete your first task",
                 criteria_code="completed_tasks >= 1",
                 points_value=50
             ),
             AchievementDefinition(
+                id="task_master",
                 name="Task Master",
                 description="Complete 10 tasks",
                 criteria_code="completed_tasks >= 10",
                 points_value=100
             ),
             AchievementDefinition(
+                id="goal_getter",
                 name="Goal Getter",
                 description="Complete your first major objective",
                 criteria_code="completed_objectives >= 1",
                 points_value=200
             ),
             AchievementDefinition(
+                id="streak_starter",
                 name="Streak Starter",
                 description="Maintain a 3-day streak",
                 criteria_code="current_streak >= 3",
                 points_value=75
             ),
             AchievementDefinition(
+                id="week_warrior",
                 name="Week Warrior",
                 description="Maintain a 7-day streak",
                 criteria_code="current_streak >= 7",
                 points_value=150
             ),
             AchievementDefinition(
+                id="planning_pro",
                 name="Planning Pro",
                 description="Create a detailed plan with 5+ sub-objectives",
                 criteria_code="max_decomposition >= 5",
                 points_value=100
             ),
             AchievementDefinition(
+                id="early_bird",
                 name="Early Bird",
                 description="Complete a task before its deadline",
                 criteria_code="early_completions >= 1",
@@ -83,7 +90,12 @@ class GamificationService:
         # Check timeliness
         timeliness_bonus = 0
         if task.due_date:
-            days_early = (task.due_date - datetime.utcnow()).days
+            # Make sure both datetimes are timezone-aware for comparison
+            now = datetime.utcnow().replace(tzinfo=task.due_date.tzinfo) if task.due_date.tzinfo else datetime.utcnow()
+            task_due = task.due_date.replace(tzinfo=None) if task.due_date.tzinfo else task.due_date
+            now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+            
+            days_early = (task_due - now_naive).days
             if days_early > 0:
                 timeliness_bonus = min(days_early * 5, 50)  # Max 50 bonus points
                 task.completion_timeliness_score = 1.0
@@ -167,7 +179,7 @@ class GamificationService:
         today_completions = [
             obj for obj in all_objectives
             if (obj.status == ObjectiveStatus.COMPLETED and
-                obj.updated_at >= today_start and
+                obj.updated_at and obj.updated_at.replace(tzinfo=None) >= today_start and
                 (obj.priority_score >= 0.5 or obj.complexity_score >= 0.5))
         ]
         
@@ -225,11 +237,11 @@ class GamificationService:
         all_objectives = await self.objective_repo.get_all()
         completed_tasks = len([
             obj for obj in all_objectives 
-            if obj.objective_type == "TASK" and obj.status == ObjectiveStatus.COMPLETED
+            if obj.objective_type == ObjectiveType.TASK and obj.status == ObjectiveStatus.COMPLETED
         ])
         completed_objectives = len([
             obj for obj in all_objectives 
-            if obj.objective_type != "TASK" and obj.status == ObjectiveStatus.COMPLETED
+            if obj.objective_type != ObjectiveType.TASK and obj.status == ObjectiveStatus.COMPLETED
         ])
         
         # Check each achievement

@@ -16,6 +16,7 @@ export interface UseObjectivesReturn {
   completedObjectives: Objective[];
   mainObjectives: Objective[];
   tasks: Objective[];
+  habits: Objective[];
 }
 
 export function useObjectives(): UseObjectivesReturn {
@@ -108,6 +109,10 @@ export function useObjectives(): UseObjectivesReturn {
     obj.objective_type === ObjectiveType.TASK
   );
 
+  const habits = objectives.filter(obj => 
+    obj.objective_type === ObjectiveType.HABIT
+  );
+
   return {
     objectives,
     loading,
@@ -120,5 +125,6 @@ export function useObjectives(): UseObjectivesReturn {
     completedObjectives,
     mainObjectives,
     tasks,
+    habits,
   };
 } 

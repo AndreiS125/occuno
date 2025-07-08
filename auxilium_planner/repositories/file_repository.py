@@ -2,18 +2,20 @@ import json
 import asyncio
 from pathlib import Path
 from typing import Any, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import aiofiles
 from uuid import UUID
 from core.config import settings
 
 class JSONEncoder(json.JSONEncoder):
-    """Custom JSON encoder to handle UUID and datetime objects."""
+    """Custom JSON encoder to handle UUID, datetime, and timedelta objects."""
     def default(self, obj):
         if isinstance(obj, UUID):
             return str(obj)
         elif isinstance(obj, datetime):
             return obj.isoformat()
+        elif isinstance(obj, timedelta):
+            return obj.total_seconds()
         return super().default(obj)
 
 class FileRepository:

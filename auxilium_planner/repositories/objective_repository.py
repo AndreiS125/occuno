@@ -90,14 +90,19 @@ class ObjectiveRepository:
             if "objectives" not in data:
                 data["objectives"] = []
             
-            objective.created_at = datetime.utcnow()
-            objective.updated_at = datetime.utcnow()
-            
-            # Calculate degree based on parent
+            # Validate parent exists if parent_id is provided
             if objective.parent_id:
                 parent = await self.get_by_id(objective.parent_id)
-                if parent:
-                    objective.degree = parent.degree + 1
+                if not parent:
+                    error_msg = f"Parent objective with ID {objective.parent_id} not found"
+                    self.logger.error(f"❌ {error_msg}")
+                    raise ValueError(error_msg)
+                objective.degree = parent.degree + 1
+            else:
+                objective.degree = 0
+            
+            objective.created_at = datetime.utcnow()
+            objective.updated_at = datetime.utcnow()
             
             data["objectives"].append(objective.dict())
             await self.file_repo.save_data(data)
@@ -115,6 +120,14 @@ class ObjectiveRepository:
             data = await self.file_repo.load_data()
             objectives_data = data.get("objectives", [])
             
+            # Validate parent_id if it's being updated
+            if "parent_id" in updates and updates["parent_id"] is not None:
+                parent = await self.get_by_id(updates["parent_id"])
+                if not parent:
+                    error_msg = f"Parent objective with ID {updates['parent_id']} not found"
+                    self.logger.error(f"❌ {error_msg}")
+                    raise ValueError(error_msg)
+            
             for i, obj_data in enumerate(objectives_data):
                 if obj_data["id"] == str(objective_id):
                     # Update fields - allow adding new fields and updating existing ones
@@ -129,6 +142,14 @@ class ObjectiveRepository:
                                 obj_data[key] = value.total_seconds()
                             else:
                                 obj_data[key] = value
+                    
+                    # Recalculate degree if parent changed
+                    if "parent_id" in updates:
+                        if updates["parent_id"] is not None:
+                            parent = await self.get_by_id(updates["parent_id"])
+                            obj_data["degree"] = parent.degree + 1
+                        else:
+                            obj_data["degree"] = 0
                     
                     obj_data["updated_at"] = datetime.utcnow().isoformat()
                     objectives_data[i] = obj_data

@@ -64,7 +64,6 @@ class UserProfileRepository:
         try:
             profile = await self.get_default_profile()
             profile.overall_score += points
-            profile.updated_at = datetime.utcnow()
             
             updated_profile = await self.update_profile(profile)
             self.logger.info(f"🎯 Added {points} points (total: {updated_profile.overall_score})")
@@ -75,17 +74,20 @@ class UserProfileRepository:
             self.logger.error(f"❌ Error adding points: {e}")
             raise
     
-    async def update_streak(self, days: int) -> UserProfile:
-        """Update user's streak."""
+    async def update_score(self, points: int) -> UserProfile:
+        """Add points to user's score (alias for add_points for gamification service compatibility)."""
+        return await self.add_points(points)
+
+    async def update_streak(self, new_streak: int, check_date: datetime = None) -> UserProfile:
+        """Update user's streak with optional specific date."""
         try:
             profile = await self.get_default_profile()
             old_streak = profile.current_streak_days
-            profile.current_streak_days = days
-            profile.last_streak_check_date = datetime.utcnow()
-            profile.updated_at = datetime.utcnow()
+            profile.current_streak_days = new_streak
+            profile.last_streak_check_date = check_date or datetime.utcnow()
             
             updated_profile = await self.update_profile(profile)
-            self.logger.info(f"🔥 Streak updated: {old_streak} → {days} days")
+            self.logger.info(f"🔥 Streak updated: {old_streak} → {new_streak} days")
             
             return updated_profile
             

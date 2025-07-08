@@ -192,30 +192,35 @@ async def create_objective(
     objective_repo: ObjectiveRepository = Depends(get_objective_repo)
 ):
     """Create a new objective."""
-    request_data = request.dict(exclude_unset=True)
-    
-    # Handle recurring info conversion
-    if request.recurring:
-        recurring_data = request.recurring.dict(exclude_unset=True)
-        # Convert end_date string to datetime if provided
-        if recurring_data.get('end_date'):
-            recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
-        request_data['recurring'] = RecurringInfo(**recurring_data)
-    
-    if request.objective_type == ObjectiveType.TASK:
-        # Handle task-specific fields
-        if request.estimated_duration:
-            request_data["estimated_duration"] = timedelta(minutes=request.estimated_duration)
-        objective = Task(**request_data)
-    else:
-        # Remove task-specific fields for non-tasks
-        task_fields = ['start_time', 'end_time', 'location', 'estimated_duration', 'actionable_steps']
-        for field in task_fields:
-            request_data.pop(field, None)
-        objective = Objective(**request_data)
-    
-    created = await objective_repo.create(objective)
-    return created.dict()
+    try:
+        request_data = request.dict(exclude_unset=True)
+        
+        # Handle recurring info conversion
+        if request.recurring:
+            recurring_data = request.recurring.dict(exclude_unset=True)
+            # Convert end_date string to datetime if provided
+            if recurring_data.get('end_date'):
+                recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
+            request_data['recurring'] = RecurringInfo(**recurring_data)
+        
+        if request.objective_type == ObjectiveType.TASK:
+            # Handle task-specific fields
+            if request.estimated_duration:
+                request_data["estimated_duration"] = timedelta(minutes=request.estimated_duration)
+            objective = Task(**request_data)
+        else:
+            # Remove task-specific fields for non-tasks
+            task_fields = ['start_time', 'end_time', 'location', 'estimated_duration', 'actionable_steps']
+            for field in task_fields:
+                request_data.pop(field, None)
+            objective = Objective(**request_data)
+        
+        created = await objective_repo.create(objective)
+        return created.dict()
+        
+    except ValueError as e:
+        # Handle parent validation errors
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/task", response_model=dict)
 async def create_task(
@@ -223,22 +228,27 @@ async def create_task(
     objective_repo: ObjectiveRepository = Depends(get_objective_repo)
 ):
     """Create a new task (convenience endpoint)."""
-    task_data = request.dict()
-    
-    # Handle recurring info conversion
-    if request.recurring:
-        recurring_data = request.recurring.dict(exclude_unset=True)
-        # Convert end_date string to datetime if provided
-        if recurring_data.get('end_date'):
-            recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
-        task_data['recurring'] = RecurringInfo(**recurring_data)
-    
-    if request.estimated_duration:
-        task_data["estimated_duration"] = timedelta(minutes=request.estimated_duration)
-    
-    task = Task(**task_data)
-    created = await objective_repo.create(task)
-    return created.dict()
+    try:
+        task_data = request.dict()
+        
+        # Handle recurring info conversion
+        if request.recurring:
+            recurring_data = request.recurring.dict(exclude_unset=True)
+            # Convert end_date string to datetime if provided
+            if recurring_data.get('end_date'):
+                recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
+            task_data['recurring'] = RecurringInfo(**recurring_data)
+        
+        if request.estimated_duration:
+            task_data["estimated_duration"] = timedelta(minutes=request.estimated_duration)
+        
+        task = Task(**task_data)
+        created = await objective_repo.create(task)
+        return created.dict()
+        
+    except ValueError as e:
+        # Handle parent validation errors
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{objective_id}", response_model=dict)
 async def update_objective(
@@ -247,26 +257,34 @@ async def update_objective(
     objective_repo: ObjectiveRepository = Depends(get_objective_repo)
 ):
     """Update an existing objective."""
-    updates = request.dict(exclude_unset=True)
-    
-    # Handle recurring info conversion
-    if "recurring" in updates and updates["recurring"]:
-        recurring_data = updates["recurring"]
-        # Convert end_date string to datetime if provided
-        if recurring_data.get('end_date'):
-            recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
-        updates['recurring'] = recurring_data
-    
-    # Handle estimated_duration conversion for tasks
-    if "estimated_duration" in updates and updates["estimated_duration"] is not None:
-        updates["estimated_duration"] = timedelta(minutes=updates["estimated_duration"])
-    
-    updated = await objective_repo.update(objective_id, updates)
-    
-    if not updated:
-        raise HTTPException(status_code=404, detail="Objective not found")
-    
-    return updated.dict()
+    try:
+        updates = request.dict(exclude_unset=True)
+        
+        # Handle recurring info conversion
+        if "recurring" in updates and updates["recurring"]:
+            recurring_data = updates["recurring"]
+            # Convert end_date string to datetime if provided
+            if recurring_data.get('end_date'):
+                recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
+            updates['recurring'] = recurring_data
+        
+        # Handle estimated_duration conversion for tasks
+        if "estimated_duration" in updates and updates["estimated_duration"] is not None:
+            updates["estimated_duration"] = timedelta(minutes=updates["estimated_duration"])
+        
+        updated = await objective_repo.update(objective_id, updates)
+        
+        if not updated:
+            raise HTTPException(status_code=404, detail="Objective not found")
+        
+        return updated.dict()
+        
+    except ValueError as e:
+        # Handle parent validation errors
+        if "Parent objective" in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
+        # Handle other ValueError cases (like objective not found)
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/{objective_id}/complete", response_model=dict)
 async def complete_objective(

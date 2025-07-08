@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any, Union
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 # --- Enums ---
 class ObjectiveType(str, Enum):
@@ -25,7 +25,7 @@ class EnergyLevel(str, Enum):
 
 # --- Gamification Models ---
 class AchievementDefinition(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
+    id: str  # Changed from UUID to str to support custom achievement IDs
     name: str
     description: str
     criteria_code: str  # Python code snippet or DSL to evaluate for unlocking
@@ -33,7 +33,7 @@ class AchievementDefinition(BaseModel):
     points_value: int = 0
 
 class UserAchievement(BaseModel):
-    achievement_id: UUID
+    achievement_id: str  # Changed from UUID to str to match AchievementDefinition.id
     unlocked_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserProfile(BaseModel):
@@ -103,6 +103,26 @@ class Task(BaseObjective):
     estimated_duration: Optional[timedelta] = None
     actual_duration: Optional[timedelta] = None
     actionable_steps: List[str] = Field(default_factory=list)
+    
+    @validator('estimated_duration', pre=True)
+    def parse_estimated_duration(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return timedelta(seconds=v)
+        if isinstance(v, timedelta):
+            return v
+        return v
+    
+    @validator('actual_duration', pre=True)
+    def parse_actual_duration(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return timedelta(seconds=v)
+        if isinstance(v, timedelta):
+            return v
+        return v
 
 # --- Data Store Structure ---
 class DataStore(BaseModel):

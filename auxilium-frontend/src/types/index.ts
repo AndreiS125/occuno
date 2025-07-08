@@ -1,7 +1,8 @@
 export enum ObjectiveType {
   MAIN_OBJECTIVE = "main_objective",
   SUB_OBJECTIVE = "sub_objective",
-  TASK = "task"
+  TASK = "task",
+  HABIT = "habit"
 }
 
 export enum ObjectiveStatus {

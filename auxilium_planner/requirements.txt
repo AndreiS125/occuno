@@ -16,4 +16,14 @@ httpx==0.28.0
 
 # Utilities
 uuid==1.30
-datetime==5.4 
+datetime==5.4
+
+# LangChain and LangGraph for AI Agents
+langchain==0.2.5
+langchain-core==0.2.43
+langchain-google-genai==1.0.10
+langgraph==0.2.0
+langgraph-checkpoint==1.0.12
+
+# Additional LangChain dependencies
+langsmith==0.1.147 
