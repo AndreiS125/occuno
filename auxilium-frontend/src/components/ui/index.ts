@@ -12,6 +12,8 @@ export * from "./range";
 // Layout Components
 export * from "./card";
 export * from "./dialog";
+export * from "./scroll-area";
+export * from "./badge";
 
 // Custom Components
 export * from "./loading-spinner";

@@ -1,0 +1,398 @@
+{
+  "e287dd25-b696-4b7e-828e-78105391a608": {
+    "thread_id": "e287dd25-b696-4b7e-828e-78105391a608",
+    "exchanges": [],
+    "created_at": "2025-07-04T22:24:47.468736",
+    "last_updated": "2025-07-04T22:24:47.468748"
+  },
+  "e06225f0-f3c1-4e18-8a55-07becf60ee18": {
+    "thread_id": "e06225f0-f3c1-4e18-8a55-07becf60ee18",
+    "exchanges": [
+      {
+        "id": "177820c7-d95e-47dd-a244-7bc31cfb7474",
+        "user_message": "I wanna learn to play chess",
+        "planner_summary": "The user wants to learn to play chess. A comprehensive, phased learning plan has been developed. It includes a main objective 'Learn to Play Chess' with five sub-objectives: 'Master Chess Fundamentals', 'Learn Basic Chess Tactics', 'Understand Opening Principles', 'Learn Basic Endgames', and 'Consistent Practice & Game Analysis'. Each sub-objective is broken down into specific tasks with estimated durations, due dates, priorities, and dependencies. Recurring tasks for practice and analysis are also included to ensure consistent skill development. The plan is designed to be manageable and prevent burnout, with a target completion for basic proficiency by late September 2025. The executor is instructed to create these objectives and tasks, ensuring proper dependencies and recurring patterns are set, and points are assigned for gamification.",
+        "executor_summary": "Created a main objective 'Learn to Play Chess' (a4b8ebef-b9ef-4e7c-9858-253718a9a446). Created five sub-objectives under the main objective:\n1. 'Master Chess Fundamentals' (598c21b2-3a30-4f9f-9097-a2561042ee3c) with three tasks: 'Watch beginner chess tutorials' (960233d4-dd92-435f-9bc7-54b20506084f), 'Practice piece movements and captures' (29440766-c941-449a-b4ca-d3a20782dd53), and 'Learn special moves (castling, en passant, pawn promotion)' (551d7951-d97d-4209-8222-561aca7d5578).\n2. 'Learn Basic Chess Tactics' (de140d27-eb6a-48b6-96af-6daa9f4faa2f) with four tasks: 'Study common tactical motifs (forks, pins, skewers)' (2fa2c9f9-af20-4187-a755-a551a828ea42), 'Practice tactical puzzles (forks, pins, skewers)' (9786af38-1613-4a9f-9f75-d58e12f2a2c9), 'Learn about discovered attacks and checks' (19ed4953-5d51-45bf-b265-cac2909e4bc7), and 'Practice mixed tactical puzzles' (fd16f354-5055-41b1-a776-92f5687bd193).\n3. 'Understand Opening Principles' (c4bdaaaa-6d04-4a52-a775-82a8c015b0df) with four tasks: 'Learn the importance of controlling the center' (3daf8619-d4b9-4f37-bd41-e2f607ce105f), 'Develop pieces efficiently' (61f2989d-0540-4990-8469-5916e9236d6c), 'Understand the importance of king safety (castling)' (ae5cef36-7989-4d52-8ab8-fe24b646bb30), and 'Practice applying opening principles in slow games' (64c105dc-e941-4d63-a05c-79daa35d4723).\n4. 'Learn Basic Endgames' (b5680012-9a38-4ca2-b5a8-d0d48cbc438d) with three tasks: 'Learn basic checkmates (King & Queen, King & Rook)' (6de113b4-dacd-4b93-8d23-87d1175a7c1e), 'Understand King and Pawn endgames (opposition)' (f70ca5d6-646f-4713-a00b-76592575cfdf), and 'Practice basic endgames against engine' (097aa5e8-40ad-41d9-9666-9871e8dd8d8d).\n5. 'Consistent Practice & Game Analysis' (6ab7007b-f32d-427f-b657-ab5e96910691) with three recurring tasks: 'Play online games (3 times/week)' (7063c5dc-3a8a-4103-9463-65d201839615), 'Analyze played games (weekly)' (ab17d905-c513-4a16-9000-8f07845eb1d3), and 'Solve daily tactical puzzles' (7b328ce7-4a4e-4445-a6fd-fdf986901b5b).\n\nDependencies were updated as follows:\n- 'Learn Basic Chess Tactics' (de140d27-eb6a-48b6-96af-6daa9f4faa2f) now depends on 'Master Chess Fundamentals' (598c21b2-3a30-4f9f-9097-a2561042ee3c).\n- 'Understand Opening Principles' (c4bdaaaa-6d04-4a52-a775-82a8c015b0df) now depends on 'Learn Basic Chess Tactics' (de140d27-eb6a-48b6-96af-6daa9f4faa2f).\n- 'Learn Basic Endgames' (b5680012-9a38-4ca2-b5a8-d0d48cbc438d) now depends on 'Understand Opening Principles' (c4bdaaaa-6d04-4a52-a775-82a8c015b0df).\n- 'Consistent Practice & Game Analysis' (6ab7007b-f32d-427f-b657-ab5e96910691) now depends on 'Learn Basic Endgames' (b5680012-9a38-4ca2-b5a8-d0d48cbc438d).\n\nAll objectives and tasks were created with comprehensive metadata, including dates, priority, complexity, energy requirements, success criteria, and context tags, as per the planning recommendations. Recurring tasks were set up with appropriate frequencies and times. The execution followed the plan precisely, ensuring a well-structured and actionable learning path for the user.",
+        "timestamp": "2025-07-04T22:24:47.481501"
+      },
+      {
+        "id": "348946f9-57e9-4130-85d3-d2db2f5bd4e9",
+        "user_message": "I've successfully set up a comprehensive learning path for you to learn to play chess! This path is structured into several key areas:\n\n*   **Learn to Play Chess (Main Objective):** This overarching goal aims to get you playing full games, understanding basic tactics, applying opening principles, and achieving a beginner rating by the end of the year.\n    *   **Master Chess Fundamentals:** This section covers the absolute basics, including how pieces move, special rules like castling, and board setup. It includes tasks for watching tutorials, practicing movements, and learning special moves.\n    *   **Learn Basic Chess Tactics:** You'll be introduced to common tactical motifs such as forks, pins, skewers, and discovered attacks. Tasks involve studying these motifs and practicing with tactical puzzles.\n    *   **Understand Opening Principles:** This part focuses on the fundamentals of the opening phase, including controlling the center, efficient piece development, and king safety (castling). You'll have tasks to learn and practice these principles in slow games.\n    *   **Learn Basic Endgames:** This section will teach you essential endgame concepts, including basic checkmates (King & Queen vs. King, King & Rook vs. King) and king and pawn endgames, with practice tasks against a chess engine.\n    *   **Consistent Practice & Game Analysis:** To ensure continuous improvement, this section includes recurring habits for playing online games (3 times/week), analyzing your played games (weekly), and solving daily tactical puzzles.\n\nEach section builds upon the previous one, ensuring a logical progression in your learning journey. I've also set up dependencies between the sub-objectives, so you can see how each area of study supports the next. Good luck with your chess learning!",
+        "planner_summary": "The comprehensive chess learning path, structured into \"Learn to Play Chess\" as the main objective, with sub-objectives for Fundamentals, Tactics, Openings, Endgames, and Consistent Practice, has been fully set up. The plan includes logical dependencies, realistic timelines extending to the end of 2025, and crucial recurring habits for daily tactical puzzles, weekly game analysis, and playing online games. The workload is well-paced to prevent burnout, ensuring a structured and effective learning journey. The system is now ready for the user to begin their chess learning journey.",
+        "executor_summary": "Confirmed that the chess learning path, including all main objectives, sub-objectives, tasks, and recurring habits, has been successfully established as per the planning agent's detailed analysis. No further objective creation, modification, or deletion was required, as the planning agent indicated the structure was already comprehensive and well-defined. The response guides the user to begin with the first objective as recommended by the planner.",
+        "timestamp": "2025-07-04T22:33:08.644660"
+      }
+    ],
+    "created_at": "2025-07-04T22:24:47.481489",
+    "last_updated": "2025-07-04T22:35:22.376283"
+  },
+  "b51e41c4-2e28-4b98-8958-b3e7fc63b1a8": {
+    "thread_id": "b51e41c4-2e28-4b98-8958-b3e7fc63b1a8",
+    "exchanges": [],
+    "created_at": "2025-07-04T22:41:00.536224",
+    "last_updated": "2025-07-04T22:41:00.536226"
+  },
+  "b2e97b40-0c25-4905-8ac7-10a7c703304c": {
+    "thread_id": "b2e97b40-0c25-4905-8ac7-10a7c703304c",
+    "exchanges": [
+      {
+        "id": "66e8adce-4510-4286-9017-2b6fb86aceb8",
+        "user_message": "Create a simple test objective",
+        "planner_summary": "\nThe user requested to create a \"simple test objective\". I have analyzed this request and determined it should be a standalone, low-priority objective. I have provided a detailed plan for the executor to create a main objective titled \"Simple System Test Objective\" with a due date of July 05, 2025, and other relevant metadata. This objective is intended solely for system testing and does not impact the user's long-term goals like learning chess.\n",
+        "executor_summary": "",
+        "timestamp": "2025-07-04T22:41:00.540977"
+      },
+      {
+        "id": "b7a3204c-0860-4bff-9e6f-4923fa784a2b",
+        "user_message": "Executor Agent error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.5-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n  quota_value: 10\n}\n, links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, retry_delay {\n  seconds: 55\n}\n]",
+        "planner_summary": "An API quota error (429) occurred, preventing the Executor Agent from creating the previously requested \"Simple System Test Objective.\" This is a system-level issue that the Planning Agent cannot resolve.",
+        "executor_summary": "",
+        "timestamp": "2025-07-04T22:44:04.264288"
+      }
+    ],
+    "created_at": "2025-07-04T22:41:00.540971",
+    "last_updated": "2025-07-04T22:45:06.260444"
+  },
+  "fa752402-c321-455c-844c-c3fea9fdf15f": {
+    "thread_id": "fa752402-c321-455c-844c-c3fea9fdf15f",
+    "exchanges": [],
+    "created_at": "2025-07-04T23:45:37.734533",
+    "last_updated": "2025-07-04T23:45:37.734536"
+  },
+  "3e977614-b96d-4477-8a06-c64a60f6fd9c": {
+    "thread_id": "3e977614-b96d-4477-8a06-c64a60f6fd9c",
+    "exchanges": [
+      {
+        "id": "91bd5094-39c2-45b5-8624-e0a06cfeeb89",
+        "user_message": "I wanna learn to play the piano",
+        "planner_summary": "",
+        "executor_summary": "",
+        "timestamp": "2025-07-04T23:45:37.747110"
+      }
+    ],
+    "created_at": "2025-07-04T23:45:37.747103",
+    "last_updated": "2025-07-04T23:45:37.747117"
+  },
+  "58babc4e-a800-48e8-929c-d924e8137f60": {
+    "thread_id": "58babc4e-a800-48e8-929c-d924e8137f60",
+    "exchanges": [],
+    "created_at": "2025-07-05T17:37:26.488665",
+    "last_updated": "2025-07-05T17:37:26.488667"
+  },
+  "bdc057a4-476d-48f7-9227-96df50125121": {
+    "thread_id": "bdc057a4-476d-48f7-9227-96df50125121",
+    "exchanges": [
+      {
+        "id": "01f16d0a-c72f-45f7-9249-6ef1fe199e89",
+        "user_message": "Hello! I really want to learn to play minecraft",
+        "planner_summary": "",
+        "executor_summary": "Created a main objective 'Learn to Play Minecraft' (ID: 16ac0346-22f7-48de-bf52-a952e3c1cf60) with a due date of August 15, 2025. Under this, created the following sub-objectives and their associated tasks:\n\n1.  **Understand Basic Mechanics & Controls** (ID: 31d77a7c-442c-4763-bec0-d29847b282a8, Due: July 10, 2025)\n    *   Task: Install Minecraft & Create First World (ID: 5a77f8b7-64df-4675-b4aa-ef3f99c648ca, Due: July 6, 2025)\n    *   Task: Learn Movement & Camera Controls (ID: 6a23654f-0077-45e8-b0a0-30dd4baa1d1b, Due: July 7, 2025)\n\n2.  **Resource Gathering & Crafting** (ID: 13eadb3e-8f4d-4b6c-ae2a-71d14dd81b4b, Due: July 15, 2025)\n    *   Task: Gather Wood and Craft Wooden Tools (ID: 0b9099e1-2961-4941-b082-0061343d9e29, Due: July 10, 2025)\n    *   Task: Mine Stone and Craft Stone Tools (ID: 43ee65e9-8f85-4bea-8e66-881708d41e33, Due: July 12, 2025)\n    *   Task: Find Food & Manage Hunger (ID: e298341d-3593-4727-bb41-a5c939a65bef, Due: July 15, 2025)\n\n3.  **Building & Shelter** (ID: 62203fae-772c-4903-a6a3-c61eed475273, Due: July 25, 2025)\n    *   Task: Build a Basic Survival Shelter (ID: 3cb89e7f-50a9-4439-bde0-956dd55d2ce6, Due: July 18, 2025)\n    *   Task: Craft and Place a Bed (ID: 7dfa2f9c-c49e-4748-a79a-fabb094e1345, Due: July 20, 2025)\n\n4.  **Exploration & Combat** (ID: 7a60ce17-7326-4127-94f4-c1e177bdd089, Due: August 5, 2025)\n    *   Task: Identify Passive and Hostile Mobs (ID: fc0a840b-a289-4cda-bc68-b42a87dfcd6c, Due: July 28, 2025)\n    *   Task: Learn Basic Combat Techniques (ID: 7c894c39-87ad-4862-a7d0-f5fe874f5151, Due: August 2, 2025)\n\nAll objectives and tasks include descriptions, start/due dates, priority/complexity scores, energy requirements, context tags, success criteria, and points awarded for completion. Tasks also include estimated durations and actionable steps. The execution followed the planning agent's recommendations precisely, creating a comprehensive learning structure for the user's goal to learn Minecraft.",
+        "timestamp": "2025-07-05T17:37:26.497672"
+      },
+      {
+        "id": "805cac3b-886d-429d-a763-664a8e3814e9",
+        "user_message": "Great! I've set up a structured learning plan to help you learn how to play Minecraft. I've created a main objective: 'Learn to Play Minecraft', which is broken down into several sub-objectives, each with specific tasks to guide you.\n\nHere's an overview of your learning path:\n\n*   **Understand Basic Mechanics & Controls:** Starting with installing the game, creating your first world, and mastering movement and camera controls.\n*   **Resource Gathering & Crafting:** You'll learn to gather essential resources like wood and stone, and then craft basic tools and manage your hunger.\n*   **Building & Shelter:** This section focuses on constructing a basic survival shelter and crafting a bed to set your spawn point and skip the night.\n*   **Exploration & Combat:** Finally, you'll learn to identify different mobs, understand their behaviors, and practice basic combat techniques to survive in the game world.\n\nEach step has realistic due dates and actionable steps to help you progress. You'll also earn gamification points as you complete these objectives. Let me know when you're ready to start!",
+        "planner_summary": "",
+        "executor_summary": "",
+        "timestamp": "2025-07-05T17:42:18.864812"
+      }
+    ],
+    "created_at": "2025-07-05T17:37:26.497667",
+    "last_updated": "2025-07-05T17:42:18.864819"
+  },
+  "61313671-72ed-48bd-b7e5-7d752912f783": {
+    "thread_id": "61313671-72ed-48bd-b7e5-7d752912f783",
+    "exchanges": [],
+    "created_at": "2025-07-05T17:48:37.971645",
+    "last_updated": "2025-07-05T17:48:37.971649"
+  },
+  "785f33cd-594b-481f-9531-01bc1d36f4dc": {
+    "thread_id": "785f33cd-594b-481f-9531-01bc1d36f4dc",
+    "exchanges": [
+      {
+        "id": "d2d9e5a1-2ebd-4be6-8b9b-7210d3bda0e8",
+        "user_message": "I want to prepare for my Calc test for derivates tomorrow.",
+        "planner_summary": "\nThe user needs to prepare for a Calculus test on derivatives tomorrow, July 6th, 2025. This is a high-priority, time-sensitive goal. I have analyzed the user's existing objectives, including \"Learn to Play Chess\" and \"Learn to Play Minecraft,\" and identified conflicts.\n\nTo accommodate the urgent Calculus test preparation, I have strategically recommended rescheduling specific chess and Minecraft tasks to later dates (July 7th-9th).\n\nA comprehensive study plan for the Calculus test has been created, broken down into a main objective \"Prepare for Calculus Derivatives Test,\" with sub-objectives for \"Review Core Derivative Concepts,\" \"Practice Problem Solving,\" and \"Final Review & Test Strategy.\" Each sub-objective includes specific tasks with estimated durations, start dates, and due dates for today (July 5th) and tomorrow morning (July 6th), ensuring a structured and focused approach to derivatives. This plan prioritizes the immediate academic need while managing the user's overall learning commitments.\n",
+        "executor_summary": "Rescheduled three existing objectives related to chess and Minecraft to later dates to free up the schedule for Calculus test preparation. Created a new main objective 'Prepare for Calculus Derivatives Test' with a due date of tomorrow. Under this main objective, created three sub-objectives: 'Review Core Derivative Concepts', 'Practice Problem Solving', and 'Final Review & Test Strategy'. Each sub-objective includes detailed tasks with specific start and due times, estimated durations, and actionable steps, ensuring a comprehensive study plan for the user's Calculus derivatives test. Dependencies were set between the sub-objectives to ensure a logical flow of preparation. All actions were executed precisely as recommended by the planning agent.",
+        "timestamp": "2025-07-05T17:48:37.981208"
+      }
+    ],
+    "created_at": "2025-07-05T17:48:37.981185",
+    "last_updated": "2025-07-05T17:53:04.623638"
+  },
+  "d70cdb07-4a6e-4c69-a49c-3a32e47e5e73": {
+    "thread_id": "d70cdb07-4a6e-4c69-a49c-3a32e47e5e73",
+    "exchanges": [],
+    "created_at": "2025-07-05T18:02:22.203803",
+    "last_updated": "2025-07-05T18:02:22.203808"
+  },
+  "5d56eea6-bf8f-4475-95b2-9d94b9ab77f0": {
+    "thread_id": "5d56eea6-bf8f-4475-95b2-9d94b9ab77f0",
+    "exchanges": [
+      {
+        "id": "2ca6b2ab-4de7-49ad-b7b4-a928ac8ffbff",
+        "user_message": "I have a history test on Tuesday. Industrial Revolution. I wanna study, but it's a light one, so about 1 hour of studying should be enough. Find when I have time and plan it out for me",
+        "planner_summary": "",
+        "executor_summary": "",
+        "timestamp": "2025-07-05T18:02:22.213628"
+      }
+    ],
+    "created_at": "2025-07-05T18:02:22.213618",
+    "last_updated": "2025-07-05T18:02:22.213641"
+  },
+  "a24ca64d-c772-4ef5-8e8b-bcebbd07cadc": {
+    "thread_id": "a24ca64d-c772-4ef5-8e8b-bcebbd07cadc",
+    "exchanges": [],
+    "created_at": "2025-07-05T18:04:30.887882",
+    "last_updated": "2025-07-05T18:04:30.887886"
+  },
+  "a635935d-d93d-4857-9dfb-38fea50908c4": {
+    "thread_id": "a635935d-d93d-4857-9dfb-38fea50908c4",
+    "exchanges": [
+      {
+        "id": "0e20a98f-0e10-4170-9186-3d0b55a7e886",
+        "user_message": "I have a history test on Tuesday. Industrial Revolution. I wanna study, but it's a light one, so about 1 hour of studying should be enough. Find when I have time and plan it out for me",
+        "planner_summary": "",
+        "executor_summary": "Checked for available time slots between July 5th and July 8th, 2025. Identified a suitable 1-hour slot on Saturday, July 6th, 2025, from 10:00 AM to 11:00 AM PDT (17:00-18:00 UTC). Created a new task objective titled \"Study for Industrial Revolution History Test\" with the specified details, including description, date, time, priority, complexity, energy requirements, context tags, success criteria, estimated duration, points, and actionable steps. Corrected the format of the `success_criteria` from a string to a list during objective creation.",
+        "timestamp": "2025-07-05T18:04:30.897450"
+      }
+    ],
+    "created_at": "2025-07-05T18:04:30.897439",
+    "last_updated": "2025-07-05T18:06:30.435334"
+  },
+  "2ddf7930-8ffa-4007-ac04-234dfa962463": {
+    "thread_id": "2ddf7930-8ffa-4007-ac04-234dfa962463",
+    "exchanges": [],
+    "created_at": "2025-07-05T18:21:10.056944",
+    "last_updated": "2025-07-05T18:21:10.056948"
+  },
+  "7fd5ff5b-17be-4ea6-8bd5-711a561f7d05": {
+    "thread_id": "7fd5ff5b-17be-4ea6-8bd5-711a561f7d05",
+    "exchanges": [
+      {
+        "id": "66181c12-e975-4990-8a9f-775c60419321",
+        "user_message": "I have a meetup with friends this Saturday at 6. Save it to my calendar",
+        "planner_summary": "The user requested to add a \"meetup with friends\" to their calendar for Saturday, July 6, 2025, at 6:00 PM PDT. I saved this to user memory and then checked for any scheduling conflicts with existing objectives. No conflicts were found with current study plans (Calculus, History) or learning goals (Chess, Minecraft). A new task will be created for the \"Friends Meetup\" from 6:00 PM to 9:00 PM PDT on July 6th, with appropriate metadata for duration, priority, and context.",
+        "executor_summary": "Created a new task objective titled 'Friends Meetup' with a start date of 2025-07-06T01:00:00Z and a due date of 2025-07-06T04:00:00Z, marked as a social event with a duration of 180 minutes.",
+        "timestamp": "2025-07-05T18:21:10.065897"
+      }
+    ],
+    "created_at": "2025-07-05T18:21:10.065886",
+    "last_updated": "2025-07-05T18:23:16.314737"
+  },
+  "0823cd92-e6f7-411f-81c7-739c61c4c1b8": {
+    "thread_id": "0823cd92-e6f7-411f-81c7-739c61c4c1b8",
+    "exchanges": [],
+    "created_at": "2025-07-05T18:37:25.250373",
+    "last_updated": "2025-07-05T18:37:25.250376"
+  },
+  "6bf7d5fc-63cc-4aff-928e-4d3fc96b58c1": {
+    "thread_id": "6bf7d5fc-63cc-4aff-928e-4d3fc96b58c1",
+    "exchanges": [
+      {
+        "id": "18dd57b4-6f21-47cf-836c-67f6bad813fe",
+        "user_message": "I have tennis practice tomorrow at 8 pm. Schedule it",
+        "planner_summary": "",
+        "executor_summary": "",
+        "timestamp": "2025-07-05T18:37:25.259601"
+      }
+    ],
+    "created_at": "2025-07-05T18:37:25.259588",
+    "last_updated": "2025-07-05T18:37:25.259611"
+  },
+  "1fe987a9-b4d0-4551-be4b-3142206c9ac7": {
+    "thread_id": "1fe987a9-b4d0-4551-be4b-3142206c9ac7",
+    "exchanges": [],
+    "created_at": "2025-07-05T18:53:46.995463",
+    "last_updated": "2025-07-05T18:53:46.995468"
+  },
+  "b6283155-6776-444d-ba0e-a94c8aa646db": {
+    "thread_id": "b6283155-6776-444d-ba0e-a94c8aa646db",
+    "exchanges": [
+      {
+        "id": "4bf00caa-a07c-4bac-8549-d35b1be615c6",
+        "user_message": "Can you completely delete my minecraft learning plans? I don't wanna do it any more",
+        "planner_summary": "",
+        "executor_summary": "Identified the main objective 'Learn to Play Minecraft' (ID: 16ac0346-22f7-48de-bf52-a952e3c1cf60) and used the `delete_objective` tool to perform a cascading delete. This action successfully removed the main objective and all 13 associated sub-objectives and tasks related to learning Minecraft.",
+        "timestamp": "2025-07-05T18:53:47.005665"
+      }
+    ],
+    "created_at": "2025-07-05T18:53:47.005655",
+    "last_updated": "2025-07-05T18:55:47.510134"
+  },
+  "6a868d1f-95c7-4950-b332-3491987f14a6": {
+    "thread_id": "6a868d1f-95c7-4950-b332-3491987f14a6",
+    "exchanges": [],
+    "created_at": "2025-07-07T22:50:45.041802",
+    "last_updated": "2025-07-07T22:50:45.041804"
+  },
+  "7ae8e7b3-13f6-4237-9c98-54f8629cab31": {
+    "thread_id": "7ae8e7b3-13f6-4237-9c98-54f8629cab31",
+    "exchanges": [
+      {
+        "id": "b614253b-e18f-4ac8-9714-48cec2622f44",
+        "user_message": "What do I have today?",
+        "planner_summary": "Today, July 7, 2025, you have two pending chess learning tasks: \"Watch beginner chess tutorials\" (due tomorrow, July 8th at 10 AM PDT) and \"Practice piece movements and captures\" (due tomorrow, July 8th at 1 PM PDT). Given your history and Calculus tests tomorrow, it is highly recommended to complete these chess tasks today to free up time. Additionally, I've noted your updated preference to delete all Minecraft learning plans, and this will be actioned by the system.",
+        "executor_summary": "Retrieved objectives for today and the broader period to identify Minecraft-related tasks. Found two chess tasks for today (Watch beginner chess tutorials and Practice piece movements and captures) both due tomorrow. Confirmed that no 'Minecraft' objectives exist in the system, thus no deletion was needed.",
+        "timestamp": "2025-07-07T22:50:45.071055"
+      }
+    ],
+    "created_at": "2025-07-07T22:50:45.071047",
+    "last_updated": "2025-07-07T22:52:19.870906"
+  },
+  "6f068a61-1b6b-4e65-b2d6-3abd312b4669": {
+    "thread_id": "6f068a61-1b6b-4e65-b2d6-3abd312b4669",
+    "exchanges": [],
+    "created_at": "2025-07-07T23:15:27.012256",
+    "last_updated": "2025-07-07T23:15:27.012259"
+  },
+  "76058ca2-0db0-4467-bd17-68165aaa3589": {
+    "thread_id": "76058ca2-0db0-4467-bd17-68165aaa3589",
+    "exchanges": [
+      {
+        "id": "e766bbe1-870e-469f-aaa0-1939f663ac7b",
+        "user_message": "What do I have today?",
+        "planner_summary": "",
+        "executor_summary": "Retrieved all objectives for July 7, 2025, using `retrieve_objectives_by_time_period`. Identified and listed specific tasks with their times, and also mentioned ongoing broader objectives. Converted times to the user's local timezone (PDT) for clarity.",
+        "timestamp": "2025-07-07T23:15:27.021920"
+      },
+      {
+        "id": "6bf8b3c4-ecf9-48e1-b63a-491cfeae4268",
+        "user_message": "Okay, can you schedule a tennis class at 6:30 pm today then? It lasts one hour",
+        "planner_summary": "",
+        "executor_summary": "Created a new task objective titled 'Tennis Class' for July 7, 2025, from 6:30 PM to 7:30 PM PDT. The objective includes a high priority, moderate complexity, high energy requirement, an estimated duration of 60 minutes, and is located at 'Tennis Court'. Points for completion are set to 20.",
+        "timestamp": "2025-07-07T23:24:24.815914"
+      },
+      {
+        "id": "f5199ef7-73c6-47d3-96bb-934903dadba1",
+        "user_message": "Can you delete all objectives related to learning chess?",
+        "planner_summary": "",
+        "executor_summary": "All objectives related to learning chess have been successfully deleted. This included the main objective 'Learn to Play Chess' and all 22 of its associated sub-objectives and tasks, such as 'Master Chess Fundamentals', 'Learn Basic Chess Tactics', 'Understand Opening Principles', 'Learn Basic Endgames', and 'Consistent Practice & Game Analysis', along with their respective sub-tasks and habits.",
+        "timestamp": "2025-07-07T23:33:43.408019"
+      },
+      {
+        "id": "5bae495d-5030-4173-9da2-98a46705c335",
+        "user_message": "Awesome. Now, can you please develop a comprehensive plan for me to re-learn spanish. I've taken it for 2 years at school, but over the summer, I forgot most of it. So, I would love to re-learn it, the exact topics that I had. My textbook was asi se dice 1 and 2. I covered them fully",
+        "planner_summary": "",
+        "executor_summary": "",
+        "timestamp": "2025-07-08T00:25:46.879249"
+      }
+    ],
+    "created_at": "2025-07-07T23:15:27.021911",
+    "last_updated": "2025-07-08T00:25:46.879253"
+  },
+  "0236f744-871a-455f-aad2-48e1c590e555": {
+    "thread_id": "0236f744-871a-455f-aad2-48e1c590e555",
+    "exchanges": [],
+    "created_at": "2025-07-08T00:37:02.616933",
+    "last_updated": "2025-07-08T00:37:02.616937"
+  },
+  "26f21979-65e8-42a1-946f-0633a4b500a8": {
+    "thread_id": "26f21979-65e8-42a1-946f-0633a4b500a8",
+    "exchanges": [
+      {
+        "id": "c326467e-cda7-4e36-a2cd-73e097ffc93b",
+        "user_message": "Now, can you please develop a comprehensive plan for me to re-learn spanish. I've taken it for 2 years at school, but over the summer, I forgot most of it. So, I would love to re-learn it, the exact topics that I had. My textbook was asi se dice 1 and 2. I covered them fully\n\nThere might be an already existing plan, but its bad and I want you to delete all the events associated with it and replan again",
+        "planner_summary": "",
+        "executor_summary": "",
+        "timestamp": "2025-07-08T00:37:02.627634"
+      }
+    ],
+    "created_at": "2025-07-08T00:37:02.627620",
+    "last_updated": "2025-07-08T00:37:02.627658"
+  },
+  "cb037743-e343-41b1-b529-7b8c98911d3e": {
+    "thread_id": "cb037743-e343-41b1-b529-7b8c98911d3e",
+    "exchanges": [],
+    "created_at": "2025-07-08T19:09:45.281719",
+    "last_updated": "2025-07-08T19:09:45.281722"
+  },
+  "23f5e941-beb4-4abc-8f03-ef13b4a44cd7": {
+    "thread_id": "23f5e941-beb4-4abc-8f03-ef13b4a44cd7",
+    "exchanges": [
+      {
+        "id": "680ffc96-2dec-457c-a507-a7bacd46382d",
+        "user_message": "What do I have tomorrow?",
+        "planner_summary": "",
+        "executor_summary": "Retrieved all objectives scheduled for tomorrow, July 9, 2025, using the `retrieve_objectives_by_time_period` tool. The objectives include Spanish learning goals and a daily Spanish practice habit.",
+        "timestamp": "2025-07-08T19:09:45.293731"
+      }
+    ],
+    "created_at": "2025-07-08T19:09:45.293719",
+    "last_updated": "2025-07-08T19:10:36.917675"
+  },
+  "ba5b33ab-f37b-4871-b629-2671f342d616": {
+    "thread_id": "ba5b33ab-f37b-4871-b629-2671f342d616",
+    "exchanges": [],
+    "created_at": "2025-07-08T19:18:25.937715",
+    "last_updated": "2025-07-08T19:18:25.937720"
+  },
+  "05dec08f-5d29-4b0e-a44d-307dda9b3e34": {
+    "thread_id": "05dec08f-5d29-4b0e-a44d-307dda9b3e34",
+    "exchanges": [
+      {
+        "id": "97c17543-7991-42e4-887d-d7f2dd74e366",
+        "user_message": "What do I have tomorrow?",
+        "planner_summary": "",
+        "executor_summary": "Retrieved all objectives scheduled for July 9, 2025, and formatted them into a clear schedule for the user.",
+        "timestamp": "2025-07-08T19:18:25.946666"
+      }
+    ],
+    "created_at": "2025-07-08T19:18:25.946656",
+    "last_updated": "2025-07-08T19:19:56.156217"
+  },
+  "ea32f79f-7ac1-4ec4-b47c-b64ae81b7e5b": {
+    "thread_id": "ea32f79f-7ac1-4ec4-b47c-b64ae81b7e5b",
+    "exchanges": [],
+    "created_at": "2025-07-08T19:23:42.430389",
+    "last_updated": "2025-07-08T19:23:42.430394"
+  },
+  "03036b3d-5dbf-4bf2-bb5d-1fa8969d21aa": {
+    "thread_id": "03036b3d-5dbf-4bf2-bb5d-1fa8969d21aa",
+    "exchanges": [
+      {
+        "id": "d09ad6fd-cc9c-4149-a8ad-a6d93bc92a5b",
+        "user_message": "What do I have tomorrow?",
+        "planner_summary": "",
+        "executor_summary": "Retrieved all objectives scheduled for tomorrow, July 9, 2025, and formatted them into a clear list for the user.",
+        "timestamp": "2025-07-08T19:23:42.439598"
+      },
+      {
+        "id": "98fcac1e-fdcd-4e37-82f1-a10e349a0618",
+        "user_message": "What about today?",
+        "planner_summary": "",
+        "executor_summary": "No specific actions were taken as the request \"What about today?\" was too vague. The system requires more context to provide a relevant response or perform any actions.",
+        "timestamp": "2025-07-08T19:27:25.007176"
+      },
+      {
+        "id": "9578bacb-286b-4108-b275-6c1aaec22aae",
+        "user_message": "I was asking you to look at the list of events today",
+        "planner_summary": "\nAnalyzed today's (July 8, 2025) objectives, focusing on the newly established Spanish re-learning plan. Identified the main objective \"Re-learn Spanish: Asi se dice 1 & 2\" and its sub-objectives, including \"Asi se dice 1 - Unidad 1: [Topic Placeholder]\" and the \"Daily Spanish Practice\" habit. Noted that a \"Tennis Class\" objective was for July 7th, not today, and that the \"History test on the Industrial Revolution\" from user memory was not found in the system. Recommended defining the content for \"Asi se dice 1 - Unidad 1\" by creating specific sub-tasks, and reminded the user about the daily Spanish practice. The analysis confirms a manageable workload for today, primarily centered on initiating Spanish studies, and provides clear instructions for the executor to follow up on discrepancies and set up the next steps for learning.\n",
+        "executor_summary": "\nAcknowledged the user's request to review today's events.\nInquired about the completion status of the \"History test on the Industrial Revolution\" for today.\nInquired about the completion status of the \"Tennis Class\" which was a past event.\nRequested specific content (vocabulary themes and grammar points) for \"Asi se dice 1 - Unidad 1\" to create detailed learning objectives.\nAsked about the completion of \"Daily Spanish Practice\" for today and offered rescheduling options.\nPrepared to update and create sub-tasks for Spanish learning objectives once the user provides the requested information.\n",
+        "timestamp": "2025-07-08T19:36:19.782918"
+      }
+    ],
+    "created_at": "2025-07-08T19:23:42.439584",
+    "last_updated": "2025-07-08T19:38:38.829920"
+  },
+  "6fefa447-2f13-439a-b71f-e088da70d7e5": {
+    "thread_id": "6fefa447-2f13-439a-b71f-e088da70d7e5",
+    "exchanges": [],
+    "created_at": "2025-07-08T19:42:48.820681",
+    "last_updated": "2025-07-08T19:42:48.820684"
+  },
+  "154ae4f9-ac02-4397-8075-348fd972468e": {
+    "thread_id": "154ae4f9-ac02-4397-8075-348fd972468e",
+    "exchanges": [
+      {
+        "id": "4d02dabb-6d13-4445-9027-763377ed903a",
+        "user_message": "Schedule a friend meetup today at 6",
+        "planner_summary": "The user requested to schedule a friend meetup today, July 8, 2025, at 6:00 PM PDT. I analyzed existing objectives for today, including Spanish learning goals and a daily Spanish practice habit, confirming no time conflicts. I also noted a flexible history test study for today. I recommend creating a new 'Friend Meetup' task from 6:00 PM PDT to 8:00 PM PDT and advise the user to schedule their history study accordingly.",
+        "executor_summary": "Created a new task objective titled \"Friend Meetup\" with a start date of 2025-07-08T18:00:00-07:00 and a due date of 2025-07-08T20:00:00-07:00, with a duration of 120 minutes. The objective is marked as a social event with low energy requirement and medium-high priority.",
+        "timestamp": "2025-07-08T19:42:48.830338"
+      }
+    ],
+    "created_at": "2025-07-08T19:42:48.830324",
+    "last_updated": "2025-07-08T19:44:05.091573"
+  }
+}

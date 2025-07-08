@@ -16,66 +16,9 @@ import {
 import { userApi } from "@/lib/api";
 import toast from "react-hot-toast";
 
-// Mock achievement definitions - in a real app, these would come from the backend
-const achievementDefinitions = [
-  {
-    id: "first_steps",
-    name: "First Steps",
-    description: "Complete your first objective",
-    icon: CheckCircle,
-    points: 10,
-    color: "text-green-500",
-    bgColor: "bg-green-100 dark:bg-green-900/20"
-  },
-  {
-    id: "task_master",
-    name: "Task Master",
-    description: "Complete 10 tasks",
-    icon: Target,
-    points: 50,
-    color: "text-blue-500",
-    bgColor: "bg-blue-100 dark:bg-blue-900/20"
-  },
-  {
-    id: "week_warrior",
-    name: "Week Warrior",
-    description: "Complete objectives 7 days in a row",
-    icon: Calendar,
-    points: 100,
-    color: "text-purple-500",
-    bgColor: "bg-purple-100 dark:bg-purple-900/20"
-  },
-  {
-    id: "high_scorer",
-    name: "High Scorer",
-    description: "Reach 500 total points",
-    icon: Star,
-    points: 200,
-    color: "text-yellow-500",
-    bgColor: "bg-yellow-100 dark:bg-yellow-900/20"
-  },
-  {
-    id: "streak_master",
-    name: "Streak Master",
-    description: "Maintain a 30-day streak",
-    icon: Zap,
-    points: 300,
-    color: "text-orange-500",
-    bgColor: "bg-orange-100 dark:bg-orange-900/20"
-  },
-  {
-    id: "champion",
-    name: "Champion",
-    description: "Complete 100 objectives",
-    icon: Trophy,
-    points: 500,
-    color: "text-red-500",
-    bgColor: "bg-red-100 dark:bg-red-900/20"
-  }
-];
-
 export default function AchievementsPage() {
   const [userStats, setUserStats] = useState<any>(null);
+  const [achievementDefinitions, setAchievementDefinitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Refs for GSAP animations
@@ -85,18 +28,75 @@ export default function AchievementsPage() {
   const progressRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchUserStats();
+    fetchData();
   }, []);
 
-  const fetchUserStats = async () => {
+  const fetchData = async () => {
     try {
-      const stats = await userApi.getGamificationStats();
+      const [stats, definitions] = await Promise.all([
+        userApi.getGamificationStats(),
+        userApi.getAchievementDefinitions()
+      ]);
+      
       setUserStats(stats);
+      
+      // Map backend definitions to frontend format with icons and colors
+      const mappedDefinitions = definitions.map((def: any) => ({
+        id: def.id,
+        name: def.name,
+        description: def.description,
+        points: def.points_value,
+        icon: getIconForAchievement(def.id),
+        color: getColorForAchievement(def.id),
+        bgColor: getBgColorForAchievement(def.id)
+      }));
+      
+      setAchievementDefinitions(mappedDefinitions);
     } catch (error) {
       toast.error("Failed to load achievements");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper functions to map achievement IDs to UI elements
+  const getIconForAchievement = (id: string) => {
+    const iconMap: { [key: string]: any } = {
+      first_steps: CheckCircle,
+      task_master: Target,
+      goal_getter: Trophy,
+      streak_starter: Zap,
+      week_warrior: Calendar,
+      planning_pro: Star,
+      early_bird: Award
+    };
+    return iconMap[id] || Trophy;
+  };
+
+  const getColorForAchievement = (id: string) => {
+    const colorMap: { [key: string]: string } = {
+      first_steps: "text-green-500",
+      task_master: "text-blue-500",
+      goal_getter: "text-purple-500",
+      streak_starter: "text-orange-500",
+      week_warrior: "text-red-500",
+      planning_pro: "text-yellow-500",
+      early_bird: "text-cyan-500"
+    };
+    return colorMap[id] || "text-gray-500";
+  };
+
+  const getBgColorForAchievement = (id: string) => {
+    const bgColorMap: { [key: string]: string } = {
+      first_steps: "bg-green-100 dark:bg-green-900/20",
+      task_master: "bg-blue-100 dark:bg-blue-900/20",
+      goal_getter: "bg-purple-100 dark:bg-purple-900/20",
+      streak_starter: "bg-orange-100 dark:bg-orange-900/20",
+      week_warrior: "bg-red-100 dark:bg-red-900/20",
+      planning_pro: "bg-yellow-100 dark:bg-yellow-900/20",
+      early_bird: "bg-cyan-100 dark:bg-cyan-900/20"
+    };
+    return bgColorMap[id] || "bg-gray-100 dark:bg-gray-900/20";
   };
 
   const unlockedAchievements = userStats?.achievements?.recent || [];

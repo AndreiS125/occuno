@@ -5,7 +5,7 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 
-from api.endpoints import objectives_api, user_api
+from api.endpoints import objectives_api, user_api, agent_api
 from core.config import settings
 from core.logging_config import setup_logging, get_logger
 from repositories import UserProfileRepository
@@ -83,6 +83,14 @@ app.include_router(
     prefix=f"{settings.api_prefix}/user",
     tags=["user"]
 )
+
+app.include_router(
+    agent_api.router,
+    prefix=f"{settings.api_prefix}/agent",
+    tags=["agent"]
+)
+
+app_logger.info("✅ Agent API router included")
 
 if __name__ == "__main__":
     main_logger = get_logger("main")

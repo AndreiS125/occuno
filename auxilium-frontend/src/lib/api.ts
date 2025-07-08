@@ -115,6 +115,11 @@ export const userApi = {
     return data;
   },
 
+  getAchievementDefinitions: async () => {
+    const { data } = await api.get("/user/gamification/achievements");
+    return data;
+  },
+
   checkStreak: async () => {
     const { data } = await api.post("/user/gamification/check-streak");
     return data;

@@ -44,7 +44,8 @@ export function ObjectiveCard({ objective, onUpdate, onDelete }: ObjectiveCardPr
   const typeIcons = {
     [ObjectiveType.MAIN_OBJECTIVE]: <AlertCircle className="w-4 h-4" />,
     [ObjectiveType.SUB_OBJECTIVE]: <ChevronRight className="w-4 h-4" />,
-    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />
+    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />,
+    [ObjectiveType.HABIT]: <Clock className="w-4 h-4" />
   };
 
   const energyIcons = {
