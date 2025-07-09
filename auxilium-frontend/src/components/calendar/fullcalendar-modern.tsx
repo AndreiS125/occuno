@@ -512,6 +512,7 @@ export function FullCalendarModern({
         slotInfo={selectedSlot ? {
           start: selectedSlot.start,
           end: selectedSlot.end,
+          allDay: selectedSlot.allDay,
         } : undefined}
       />
 

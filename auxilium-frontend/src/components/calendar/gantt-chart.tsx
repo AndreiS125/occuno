@@ -271,8 +271,9 @@ export function GanttChart({ objectives, onUpdate, onDelete, onRefresh }: GanttC
       
       // For tasks, also update time fields
       if (objective.objective_type === ObjectiveType.TASK) {
-        updates.start_time = newStartDate.toISOString();
-        updates.end_time = newEndDate.toISOString();
+        // Use start_date/due_date for both date and time
+        updates.start_date = newStartDate.toISOString();
+        updates.due_date = newEndDate.toISOString();
       }
       
       await onUpdate(objective.id, updates);

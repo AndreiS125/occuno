@@ -168,7 +168,7 @@ class QuotaManager:
         
         return current_key
     
-    async def check_and_wait_if_needed(self):
+    async def check_and_wait_if_needed(self, pause_callback=None):
         """Check if we need to wait for rate limit management (per-minute limits)."""
         # Calculate total requests across all keys today
         total_requests_today = sum(usage.requests_today for usage in self.key_usage.values())
@@ -177,9 +177,22 @@ class QuotaManager:
         if total_requests_today > 0 and total_requests_today % 10 == 0:
             logger.warning(f"🚨 API Quota: {total_requests_today} requests made today, pausing for 40 seconds to avoid per-minute limits...")
             
+            # Notify about quota pause start
+            if pause_callback:
+                await pause_callback('quota_pause_start', {
+                    'requests_today': total_requests_today,
+                    'pause_duration': 40
+                })
+            
             # Import asyncio here to avoid circular imports
             import asyncio
             await asyncio.sleep(40)
+            
+            # Notify about quota pause end
+            if pause_callback:
+                await pause_callback('quota_pause_end', {
+                    'requests_today': total_requests_today
+                })
             
             logger.info("✅ Quota pause complete, continuing...")
     

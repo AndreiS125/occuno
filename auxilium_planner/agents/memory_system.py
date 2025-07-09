@@ -21,6 +21,107 @@ from agents.tools.memory_tools import get_user_memories_for_prompt
 logger = get_logger("memory_system")
 
 
+class AgentMessage:
+    """Represents a single agent message/response."""
+    
+    def __init__(self, agent: str, content: str, message_type: str = "response", thinking_content: str = "", tool_calls: List[Dict] = None, timestamp: str = None):
+        self.agent = agent  # 'planning' or 'executor'
+        self.content = content
+        self.message_type = message_type  # 'response', 'thinking', 'tool_call', 'tool_result'
+        self.thinking_content = thinking_content
+        self.tool_calls = tool_calls or []
+        self.timestamp = timestamp or datetime.utcnow().isoformat()
+        self.id = str(uuid.uuid4())
+        
+        # Enhanced tool data for better frontend display
+        self.tool_name = None
+        self.tool_args = {}
+        self.tool_result_parsed = {}
+        self.tool_call_id = None
+        
+        # If this is a tool result, try to extract structured data
+        if message_type == "tool_result" and tool_calls:
+            for tool_call in tool_calls:
+                if isinstance(tool_call, dict):
+                    self.tool_name = tool_call.get('name')
+                    self.tool_call_id = tool_call.get('call_id')
+                    # Try to parse the content as JSON for structured data
+                    try:
+                        self.tool_result_parsed = json.loads(content) if content else {}
+                    except (json.JSONDecodeError, TypeError):
+                        self.tool_result_parsed = {"raw_content": content}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "agent": self.agent,
+            "content": self.content,
+            "message_type": self.message_type,
+            "thinking_content": self.thinking_content,
+            "tool_calls": self.tool_calls,
+            "timestamp": self.timestamp,
+            # Enhanced tool data
+            "tool_name": self.tool_name,
+            "tool_args": self.tool_args,
+            "tool_result_parsed": self.tool_result_parsed,
+            "tool_call_id": self.tool_call_id
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'AgentMessage':
+        msg = cls(
+            agent=data["agent"],
+            content=data["content"],
+            message_type=data.get("message_type", "response"),
+            thinking_content=data.get("thinking_content", ""),
+            tool_calls=data.get("tool_calls", []),
+            timestamp=data.get("timestamp")
+        )
+        msg.id = data.get("id", str(uuid.uuid4()))
+        
+        # Load enhanced tool data
+        msg.tool_name = data.get("tool_name")
+        msg.tool_args = data.get("tool_args", {})
+        msg.tool_result_parsed = data.get("tool_result_parsed", {})
+        msg.tool_call_id = data.get("tool_call_id")
+        
+        return msg
+
+
+class StreamingEvent:
+    """Represents a streaming event during agent execution."""
+    
+    def __init__(self, event_type: str, agent: str, content: str, metadata: Dict = None, timestamp: str = None):
+        self.event_type = event_type  # 'thinking', 'tool_call', 'tool_result', 'agent_response'
+        self.agent = agent
+        self.content = content
+        self.metadata = metadata or {}
+        self.timestamp = timestamp or datetime.utcnow().isoformat()
+        self.id = str(uuid.uuid4())
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "event_type": self.event_type,
+            "agent": self.agent,
+            "content": self.content,
+            "metadata": self.metadata,
+            "timestamp": self.timestamp
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'StreamingEvent':
+        event = cls(
+            event_type=data["event_type"],
+            agent=data["agent"],
+            content=data["content"],
+            metadata=data.get("metadata", {}),
+            timestamp=data.get("timestamp")
+        )
+        event.id = data.get("id", str(uuid.uuid4()))
+        return event
+
+
 class ExchangeSummary:
     """Represents a single exchange in the conversation."""
     
@@ -30,6 +131,30 @@ class ExchangeSummary:
         self.executor_summary = executor_summary
         self.timestamp = datetime.utcnow().isoformat()
         self.id = str(uuid.uuid4())
+        
+        # New fields for detailed conversation tracking
+        self.agent_messages: List[AgentMessage] = []
+        self.streaming_events: List[StreamingEvent] = []
+        self.final_response = ""
+        self.execution_metadata = {}
+        self.is_complete = False
+    
+    def add_agent_message(self, agent: str, content: str, message_type: str = "response", thinking_content: str = "", tool_calls: List[Dict] = None):
+        """Add an agent message to this exchange."""
+        message = AgentMessage(agent, content, message_type, thinking_content, tool_calls)
+        self.agent_messages.append(message)
+        return message
+    
+    def add_streaming_event(self, event_type: str, agent: str, content: str, metadata: Dict = None):
+        """Add a streaming event to this exchange."""
+        event = StreamingEvent(event_type, agent, content, metadata)
+        self.streaming_events.append(event)
+        return event
+    
+    def set_final_response(self, response: str):
+        """Set the final response for this exchange."""
+        self.final_response = response
+        self.is_complete = True
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -37,7 +162,12 @@ class ExchangeSummary:
             "user_message": self.user_message,
             "planner_summary": self.planner_summary,
             "executor_summary": self.executor_summary,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
+            "agent_messages": [msg.to_dict() for msg in self.agent_messages],
+            "streaming_events": [event.to_dict() for event in self.streaming_events],
+            "final_response": self.final_response,
+            "execution_metadata": self.execution_metadata,
+            "is_complete": self.is_complete
         }
     
     @classmethod
@@ -49,6 +179,22 @@ class ExchangeSummary:
         )
         exchange.id = data.get("id", str(uuid.uuid4()))
         exchange.timestamp = data.get("timestamp", datetime.utcnow().isoformat())
+        exchange.final_response = data.get("final_response", "")
+        exchange.execution_metadata = data.get("execution_metadata", {})
+        exchange.is_complete = data.get("is_complete", False)
+        
+        # Load agent messages
+        exchange.agent_messages = [
+            AgentMessage.from_dict(msg_data) 
+            for msg_data in data.get("agent_messages", [])
+        ]
+        
+        # Load streaming events
+        exchange.streaming_events = [
+            StreamingEvent.from_dict(event_data) 
+            for event_data in data.get("streaming_events", [])
+        ]
+        
         return exchange
 
 
@@ -190,6 +336,44 @@ class MemorySystem:
         self.logger.info(f"Started new exchange {exchange.id} for thread {thread_id}")
         return exchange.id
     
+    async def add_agent_message(self, thread_id: str, exchange_id: str, agent: str, content: str, message_type: str = "response", thinking_content: str = "", tool_calls: List[Dict] = None):
+        """Add an agent message to an exchange."""
+        history = await self.get_conversation_history(thread_id)
+        for exchange in history.exchanges:
+            if exchange.id == exchange_id:
+                message = exchange.add_agent_message(agent, content, message_type, thinking_content, tool_calls)
+                await self.save_conversation_history(history)
+                self.logger.info(f"Added {agent} agent message to exchange {exchange_id}")
+                return message
+        
+        self.logger.error(f"Exchange {exchange_id} not found in thread {thread_id}")
+        return None
+    
+    async def add_streaming_event(self, thread_id: str, exchange_id: str, event_type: str, agent: str, content: str, metadata: Dict = None):
+        """Add a streaming event to an exchange."""
+        history = await self.get_conversation_history(thread_id)
+        for exchange in history.exchanges:
+            if exchange.id == exchange_id:
+                event = exchange.add_streaming_event(event_type, agent, content, metadata)
+                await self.save_conversation_history(history)
+                self.logger.debug(f"Added streaming event {event_type} to exchange {exchange_id}")
+                return event
+        
+        self.logger.error(f"Exchange {exchange_id} not found in thread {thread_id}")
+        return None
+    
+    async def set_final_response(self, thread_id: str, exchange_id: str, response: str):
+        """Set the final response for an exchange."""
+        history = await self.get_conversation_history(thread_id)
+        for exchange in history.exchanges:
+            if exchange.id == exchange_id:
+                exchange.set_final_response(response)
+                await self.save_conversation_history(history)
+                self.logger.info(f"Set final response for exchange {exchange_id}")
+                return
+        
+        self.logger.error(f"Exchange {exchange_id} not found in thread {thread_id}")
+    
     async def update_planner_summary(self, thread_id: str, exchange_id: str, planner_summary: str):
         """Update the planner summary for an exchange."""
         history = await self.get_conversation_history(thread_id)
@@ -203,6 +387,13 @@ class MemorySystem:
         history.update_executor_summary(exchange_id, executor_summary)
         await self.save_conversation_history(history)
         self.logger.info(f"Updated executor summary for exchange {exchange_id}")
+    
+    async def get_current_exchange(self, thread_id: str) -> Optional[ExchangeSummary]:
+        """Get the current (last) exchange for a thread."""
+        history = await self.get_conversation_history(thread_id)
+        if history.exchanges:
+            return history.exchanges[-1]
+        return None
     
     async def get_context_for_planner(self, thread_id: str) -> str:
         """Get formatted context for the planning agent (includes history)."""
@@ -310,22 +501,28 @@ class MemorySystem:
             await self.save_conversation_history(history)
             
             # Initialize empty state for LangGraph
-            initial_state = {
-                "messages": [],
-                "planning_analysis": "",
-                "user_memories": await get_user_memories_for_prompt(),
-                "thread_id": thread_id,
-                "exchange_id": None,
-                "created_at": datetime.utcnow().isoformat(),
-                "last_updated": datetime.utcnow().isoformat()
-            }
-            
-            config = RunnableConfig(
-                configurable={"thread_id": thread_id}
-            )
-            
-            # LangGraph checkpointer API - use empty metadata and versions
-            self.checkpointer.put(config, initial_state, {}, {})
+            try:
+                initial_state = {
+                    "messages": [],
+                    "planning_analysis": "",
+                    "user_memories": await get_user_memories_for_prompt(),
+                    "thread_id": thread_id,
+                    "exchange_id": None,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "last_updated": datetime.utcnow().isoformat()
+                }
+                
+                config = RunnableConfig(
+                    configurable={"thread_id": thread_id}
+                )
+                
+                # LangGraph checkpointer API - use empty metadata and versions
+                self.checkpointer.put(config, initial_state, {}, {})
+                self.logger.info(f"Initialized LangGraph state for thread {thread_id}")
+            except Exception as checkpoint_error:
+                # If checkpointer fails, still return the thread_id since we saved the history
+                self.logger.warning(f"Failed to initialize LangGraph state for thread {thread_id}: {checkpoint_error}")
+                self.logger.info("Continuing since conversation history was saved successfully")
             
             self.logger.info(f"Created new conversation thread: {thread_id}")
             return thread_id
@@ -339,34 +536,45 @@ class MemorySystem:
         try:
             # Remove from memory file
             data = self._load_memory_data()
-            if thread_id in data:
+            thread_existed = thread_id in data
+            
+            if thread_existed:
                 del data[thread_id]
                 self._save_memory_data(data)
+                self.logger.info(f"Removed thread {thread_id} from memory file")
+            else:
+                self.logger.info(f"Thread {thread_id} not found in memory file (already deleted or never existed)")
             
-            # Clear LangGraph state
-            user_memories = await get_user_memories_for_prompt()
-            reset_state = {
-                "messages": [],
-                "planning_analysis": "",
-                "user_memories": user_memories,
-                "thread_id": thread_id,
-                "exchange_id": None,
-                "created_at": datetime.utcnow().isoformat(),
-                "last_updated": datetime.utcnow().isoformat(),
-                "cleared_at": datetime.utcnow().isoformat()
-            }
+            # Clear LangGraph state (always do this to ensure clean state)
+            try:
+                user_memories = await get_user_memories_for_prompt()
+                reset_state = {
+                    "messages": [],
+                    "planning_analysis": "",
+                    "user_memories": user_memories,
+                    "thread_id": thread_id,
+                    "exchange_id": None,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "last_updated": datetime.utcnow().isoformat(),
+                    "cleared_at": datetime.utcnow().isoformat()
+                }
+                
+                config = RunnableConfig(
+                    configurable={"thread_id": thread_id}
+                )
+                
+                self.checkpointer.put(config, reset_state, {}, {})
+                self.logger.info(f"Cleared LangGraph state for thread {thread_id}")
+            except Exception as checkpoint_error:
+                # If checkpointer fails, still consider it successful since we cleared the memory file
+                self.logger.warning(f"Failed to clear LangGraph state for thread {thread_id}: {checkpoint_error}")
+                self.logger.info("Continuing since memory file was cleared successfully")
             
-            config = RunnableConfig(
-                configurable={"thread_id": thread_id}
-            )
-            
-            self.checkpointer.put(config, reset_state, {}, {})
-            
-            self.logger.info(f"Cleared conversation history for thread: {thread_id}")
+            self.logger.info(f"Successfully cleared conversation history for thread: {thread_id}")
             return True
         
         except Exception as e:
-            self.logger.error(f"Error clearing thread history: {e}")
+            self.logger.error(f"Error clearing thread history for {thread_id}: {e}")
             return False
     
     async def get_conversation_summary(self, thread_id: str) -> str:

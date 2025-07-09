@@ -75,15 +75,30 @@ export function ObjectiveModal({
     ...initialData,
     all_day: slotInfo.allDay || false,
     ...(slotInfo.allDay ? {
+      // For all-day events, use date fields
       start_date: formatDateOnly(slotInfo.start),
       due_date: formatDateOnly(slotInfo.end),
     } : {
+      // For timed events, use datetime fields
       start_time: formatDateTimeLocal(slotInfo.start),
       end_time: formatDateTimeLocal(slotInfo.end),
-      start_date: formatDateOnly(slotInfo.start),
-      due_date: formatDateOnly(slotInfo.end),
     })
   } : initialData;
+
+  // Debug logging
+  if (slotInfo) {
+    console.log("🔧 ObjectiveModal - slotInfo received:", {
+      slotInfo,
+      allDay: slotInfo.allDay,
+      start: slotInfo.start,
+      end: slotInfo.end,
+      formattedStart: slotInfo.allDay ? formatDateOnly(slotInfo.start) : formatDateTimeLocal(slotInfo.start),
+      formattedEnd: slotInfo.allDay ? formatDateOnly(slotInfo.end) : formatDateTimeLocal(slotInfo.end),
+      preparedData: preparedInitialData
+    });
+  }
+  
+  console.log("🔧 ObjectiveModal - Final preparedInitialData:", preparedInitialData);
 
   return (
     <BaseModal

@@ -39,38 +39,100 @@ def safe_json_dumps(obj, **kwargs):
 
 
 class ObjectiveCreate(BaseModel):
-    """Schema for creating objectives with all available fields"""
-    title: str = Field(description="Title of the objective")
-    description: Optional[str] = Field(default=None, description="Detailed description")
-    objective_type: ObjectiveType = Field(description="Type: main_objective, sub_objective, task, habit")
-    parent_id: Optional[str] = Field(default=None, description="Parent objective ID (null for root objectives)")
-    start_date: Optional[str] = Field(default=None, description="Start date (ISO format)")
-    due_date: Optional[str] = Field(default=None, description="Due date (ISO format)")
-    all_day: bool = Field(default=True, description="All-day event flag (true for learning objectives)")
-    priority_score: float = Field(default=0.5, description="Priority 0.0-1.0")
-    complexity_score: float = Field(default=0.5, description="Complexity 0.0-1.0")
-    energy_requirement: EnergyLevel = Field(default=EnergyLevel.MEDIUM, description="Energy level: low, medium, high")
-    status: ObjectiveStatus = Field(default=ObjectiveStatus.NOT_STARTED, description="Current status")
-    context_tags: List[str] = Field(default_factory=list, description="Context tags for categorization")
-    success_criteria: List[str] = Field(default_factory=list, description="Success criteria and metrics")
-    dependencies: List[str] = Field(default_factory=list, description="List of objective IDs this depends on")
-    points_awarded_for_completion: int = Field(default=10, description="Gamification points for completion")
+    """Schema for creating objectives with all available fields.
+    
+    MANDATORY: Fill out ALL available fields unless they genuinely need to be null.
+    The system supports deep hierarchies - don't be afraid to create 10, 20, or even 50+ objectives
+    for comprehensive learning paths or complex projects.
+    """
+    title: str = Field(
+        description="Clear, descriptive name for the objective"
+    )
+    description: Optional[str] = Field(
+        default=None, 
+        description="Detailed explanation of what needs to be accomplished. Be thorough."
+    )
+    objective_type: ObjectiveType = Field(
+        description="Type of objective - Valid values: 'main_objective' (top-level goals), 'sub_objective' (intermediate goals), 'task' (actionable items), 'habit' (recurring activities)"
+    )
+    parent_id: Optional[str] = Field(
+        default=None, 
+        description="UUID of parent objective to create hierarchy. Set to null ONLY for root-level objectives. Use this to build deep nested structures."
+    )
+    start_date: Optional[str] = Field(
+        default=None, 
+        description="Start date/time in ISO format (e.g., '2025-07-15T14:30:00-07:00'). For all-day events, time portion is ignored. Always set realistic dates."
+    )
+    due_date: Optional[str] = Field(
+        default=None, 
+        description="Due date/time in ISO format. For all-day events, time portion is ignored. Base on complexity and current time."
+    )
+    all_day: bool = Field(
+        default=True, 
+        description="True for learning objectives/long-term goals (time ignored), False for specific timed events like meetings (time used)"
+    )
+    priority_score: float = Field(
+        default=0.5, 
+        description="Priority from 0.0 to 1.0. Use: 0.3=low, 0.5=medium, 0.8=high priority"
+    )
+    complexity_score: float = Field(
+        default=0.5, 
+        description="Complexity from 0.0 to 1.0. Use: 0.3=simple, 0.5=moderate, 0.8=complex"
+    )
+    energy_requirement: EnergyLevel = Field(
+        default=EnergyLevel.MEDIUM, 
+        description="Energy needed. Valid values: 'low', 'medium', 'high'"
+    )
+    status: ObjectiveStatus = Field(
+        default=ObjectiveStatus.NOT_STARTED, 
+        description="Current status. Valid values: 'not_started', 'in_progress', 'blocked', 'completed', 'cancelled'"
+    )
+    context_tags: List[str] = Field(
+        default_factory=list, 
+        description="Tags for categorization, e.g., ['learning', 'programming', 'deep-learning', 'frontend', 'backend']"
+    )
+    success_criteria: List[str] = Field(
+        default_factory=list, 
+        description="Specific measurable outcomes that define success for this objective"
+    )
+    dependencies: List[str] = Field(
+        default_factory=list, 
+        description="List of objective IDs (UUIDs) that must be completed before this one can start"
+    )
+    points_awarded_for_completion: int = Field(
+        default=10, 
+        description="Gamification points (10=default, 20-50=significant achievements, 100+=major milestones)"
+    )
     
     # Task-specific fields (only used when objective_type is "task")
-    start_time: Optional[str] = Field(default=None, description="Start time for tasks (ISO format)")
-    end_time: Optional[str] = Field(default=None, description="End time for tasks (ISO format)")
-    location: Optional[str] = Field(default=None, description="Location for tasks")
-    estimated_duration_minutes: Optional[int] = Field(default=None, description="Estimated duration in minutes")
-    actionable_steps: List[str] = Field(default_factory=list, description="Specific actionable steps for tasks")
+    location: Optional[str] = Field(
+        default=None, 
+        description="Where the task takes place (only for tasks)"
+    )
+    estimated_duration_minutes: Optional[int] = Field(
+        default=None, 
+        description="Estimated time in minutes to complete the task (only for tasks)"
+    )
+    actionable_steps: List[str] = Field(
+        default_factory=list, 
+        description="Specific step-by-step actions to complete the task (only for tasks)"
+    )
     
     # Recurring/repetition fields (for habits and recurring objectives)
-    # Use nested format: {"recurring": {"frequency": "daily", "interval": 1, "time_of_day": "08:00"}}
-    recurring: Optional[Dict[str, Any]] = Field(default=None, description="Recurring pattern: {frequency, interval, days_of_week, time_of_day}")
+    recurring: Optional[Dict[str, Any]] = Field(
+        default=None, 
+        description="""Recurring pattern as nested object: {
+            'frequency': 'daily'|'weekly'|'monthly',
+            'interval': 1 (every), 2 (every other), etc.,
+            'days_of_week': [0,1,2,3,4] for weekdays (0=Monday, 6=Sunday),
+            'time_of_day': '09:00' (HH:MM format)
+        }"""
+    )
     # Legacy flat format support (prefer nested format above)
-    recurring_frequency: Optional[str] = Field(default=None, description="Legacy: Frequency: daily, weekly, monthly")
-    recurring_interval: Optional[int] = Field(default=1, description="Legacy: Every N days/weeks/months")
-    recurring_days_of_week: Optional[List[int]] = Field(default=None, description="Legacy: Days of week (0=Monday, 6=Sunday)")
-    recurring_time_of_day: Optional[str] = Field(default=None, description="Legacy: Time of day for recurring (HH:MM format)")
+    recurring_frequency: Optional[str] = Field(default=None, description="DEPRECATED: Use 'recurring' object instead")
+    recurring_interval: Optional[int] = Field(default=1, description="DEPRECATED: Use 'recurring' object instead")
+    recurring_days_of_week: Optional[List[int]] = Field(default=None, description="DEPRECATED: Use 'recurring' object instead")
+    recurring_time_of_day: Optional[str] = Field(default=None, description="DEPRECATED: Use 'recurring' object instead")
 
 
 @tool
@@ -249,12 +311,14 @@ async def create_objective(objective_data: str) -> str:
     Create a new objective or task with full parameter support.
     
     Supports all objective fields including:
-    - Basic: title, description, dates, priority, complexity, energy
+    - Basic: title, description, dates (with time included), priority, complexity, energy
     - Hierarchy: parent_id, objective_type
     - Gamification: points_awarded_for_completion
     - Dependencies: dependencies list
     - Task-specific: estimated_duration_minutes, location, actionable_steps
     - Recurring: frequency, interval, days_of_week, time_of_day
+    
+    Note: For non-all-day events, include time in start_date/due_date (ISO format)
     
     Args:
         objective_data: JSON string containing objective details with all required fields
@@ -315,8 +379,6 @@ async def create_objective(objective_data: str) -> str:
             # Create Task with task-specific fields
             task_fields = base_fields.copy()
             task_fields.update({
-                "start_time": datetime.fromisoformat(data["start_time"]) if data.get("start_time") else None,
-                "end_time": datetime.fromisoformat(data["end_time"]) if data.get("end_time") else None,
                 "location": data.get("location"),
                 "actionable_steps": data.get("actionable_steps", []),
                 "estimated_duration": timedelta(minutes=data["estimated_duration_minutes"]) if data.get("estimated_duration_minutes") else None
@@ -331,7 +393,7 @@ async def create_objective(objective_data: str) -> str:
         response_data = {
             "success": True,
             "message": f"Created {created.objective_type}: {created.title}",
-            "objective": created.dict(),
+            "id": created.id,
             "recurring_enabled": recurring_info is not None,
             "estimated_duration_minutes": data.get("estimated_duration_minutes") if data.get("objective_type") == "task" else None
         }
@@ -359,7 +421,7 @@ async def update_objective(objective_id: str, updates: str) -> str:
         repo = ObjectiveRepository()
         
         # Convert datetime strings to datetime objects
-        for field in ["start_date", "due_date", "start_time", "end_time"]:
+        for field in ["start_date", "due_date"]:
             if field in update_data and update_data[field]:
                 update_data[field] = datetime.fromisoformat(update_data[field])
         

@@ -34,10 +34,10 @@ interface ObjectiveFormData {
   priority_score: number;
   complexity_score: number;
   parent_id: string | null;
-  start_time: string;
-  end_time: string;
-  start_date: string;
-  due_date: string;
+  start_date: string;  // Contains date for all-day events
+  due_date: string;    // Contains date for all-day events
+  start_time: string;  // Contains datetime for timed events
+  end_time: string;    // Contains datetime for timed events
   all_day: boolean;
   location?: string;
   is_recurring: boolean;
@@ -90,57 +90,71 @@ export function ObjectiveForm({
         type: data.objective_type,
         start_date: data.start_date,
         due_date: data.due_date,
+        all_day: data.all_day,
       });
+      
+      // Handle date/time fields based on all_day flag
+      let startTime = "";
+      let endTime = "";
+      let startDate = "";
+      let dueDate = "";
+      
+      if (data.all_day) {
+        // For all-day events, use date-only fields
+        startDate = data.start_date ? formatDateOnly(new Date(data.start_date)) : "";
+        dueDate = data.due_date ? formatDateOnly(new Date(data.due_date)) : "";
+      } else {
+        // For timed events, convert stored dates to datetime-local format
+        startTime = data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : "";
+        endTime = data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : "";
+      }
       
       return {
         title: data.title || "",
         description: data.description || "",
         objective_type: data.objective_type || defaultType,
         energy_requirement: data.energy_requirement || EnergyLevel.MEDIUM,
-        priority_score: data.priority_score ?? 0.5,
-        complexity_score: data.complexity_score ?? 0.5,
-        parent_id: data.parent_id || parentId || null,
-        // FIXED: Prioritize explicit start_time/end_time fields from calendar selection
-        start_time: data.start_time || 
-          (data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : ""),
-        end_time: data.end_time || 
-          (data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : ""),
-        start_date: data.start_date ? formatDateOnly(new Date(data.start_date)) : "",
-        due_date: data.due_date ? formatDateOnly(new Date(data.due_date)) : "",
+        priority_score: data.priority_score ?? 50,
+        complexity_score: data.complexity_score ?? 50,
+        parent_id: data.parent_id || null,
+        start_date: startDate,
+        due_date: dueDate,
+        start_time: startTime,
+        end_time: endTime,
+        all_day: data.all_day ?? false,
         location: data.location || "",
-        is_recurring: !!objRecurring,
+        is_recurring: data.is_recurring || false,
         status: data.status || ObjectiveStatus.NOT_STARTED,
         completion_percentage: data.completion_percentage || 0,
         recurring: objRecurring ? {
           frequency: objRecurring.frequency || "daily",
           interval: objRecurring.interval || 1,
           days_of_week: objRecurring.days_of_week || [],
-          time_of_day: objRecurring.time_of_day || "",
+          time_of_day: objRecurring.time_of_day || "09:00",
           end_date: objRecurring.end_date || "",
         } : {
           frequency: "daily",
           interval: 1,
           days_of_week: [],
-          time_of_day: "",
+          time_of_day: "09:00",
           end_date: "",
         },
-        all_day: data.all_day || false,
       };
     }
     
-    // Default form state
     return {
       title: "",
       description: "",
       objective_type: defaultType,
       energy_requirement: EnergyLevel.MEDIUM,
-      priority_score: 0.5,
-      complexity_score: 0.5,
-      parent_id: parentId || null,
-      start_time: "",
-      end_time: "",
+      priority_score: 50,
+      complexity_score: 50,
+      parent_id: null,
       start_date: "",
       due_date: "",
+      start_time: "",
+      end_time: "",
+      all_day: false,
       location: "",
       is_recurring: false,
       status: ObjectiveStatus.NOT_STARTED,
@@ -149,55 +163,79 @@ export function ObjectiveForm({
         frequency: "daily",
         interval: 1,
         days_of_week: [],
-        time_of_day: "",
+        time_of_day: "09:00",
         end_date: "",
       },
-      all_day: false,
     };
   });
 
   // Update form data when initialData changes
   useEffect(() => {
+    console.log("🔧 ObjectiveForm - useEffect triggered with initialData:", initialData);
+    
     if (initialData) {
       const data = initialData as any;
       const objRecurring = data.recurring;
+      
+      console.log("🔄 Form data update - initialData changed:", {
+        id: data.id,
+        type: data.objective_type,
+        start_date: data.start_date,
+        due_date: data.due_date,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        all_day: data.all_day,
+      });
+      
+      // Handle date/time fields based on all_day flag
+      let startTime = "";
+      let endTime = "";
+      let startDate = "";
+      let dueDate = "";
+      
+      if (data.all_day) {
+        // For all-day events, use date-only fields
+        startDate = data.start_date ? formatDateOnly(new Date(data.start_date)) : "";
+        dueDate = data.due_date ? formatDateOnly(new Date(data.due_date)) : "";
+      } else {
+        // For timed events, convert stored dates to datetime-local format
+        startTime = data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : "";
+        endTime = data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : "";
+      }
       
       setFormData({
         title: data.title || "",
         description: data.description || "",
         objective_type: data.objective_type || (defaultToTask ? ObjectiveType.TASK : ObjectiveType.MAIN_OBJECTIVE),
         energy_requirement: data.energy_requirement || EnergyLevel.MEDIUM,
-        priority_score: data.priority_score ?? 0.5,
-        complexity_score: data.complexity_score ?? 0.5,
-        parent_id: data.parent_id || parentId || null,
-        // FIXED: Prioritize explicit start_time/end_time fields from calendar selection
-        start_time: data.start_time || 
-          (data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : ""),
-        end_time: data.end_time || 
-          (data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : ""),
-        start_date: data.start_date ? formatDateOnly(new Date(data.start_date)) : "",
-        due_date: data.due_date ? formatDateOnly(new Date(data.due_date)) : "",
+        priority_score: data.priority_score ?? 50,
+        complexity_score: data.complexity_score ?? 50,
+        parent_id: data.parent_id || null,
+        start_date: startDate,
+        due_date: dueDate,
+        start_time: startTime,
+        end_time: endTime,
+        all_day: data.all_day ?? false,
         location: data.location || "",
-        is_recurring: !!objRecurring,
+        is_recurring: data.is_recurring || false,
         status: data.status || ObjectiveStatus.NOT_STARTED,
         completion_percentage: data.completion_percentage || 0,
         recurring: objRecurring ? {
           frequency: objRecurring.frequency || "daily",
           interval: objRecurring.interval || 1,
           days_of_week: objRecurring.days_of_week || [],
-          time_of_day: objRecurring.time_of_day || "",
+          time_of_day: objRecurring.time_of_day || "09:00",
           end_date: objRecurring.end_date || "",
         } : {
           frequency: "daily",
           interval: 1,
           days_of_week: [],
-          time_of_day: "",
+          time_of_day: "09:00",
           end_date: "",
         },
-        all_day: data.all_day || false,
       });
     }
-  }, [initialData, defaultToTask, parentId]);
+  }, [initialData, defaultToTask]);
 
   // Load parent objectives
   useEffect(() => {
@@ -244,7 +282,7 @@ export function ObjectiveForm({
         all_day: formData.all_day,  // Explicit all-day flag
       };
 
-      // SIMPLIFIED DATE/TIME HANDLING: Use all_day field to determine format
+      // Handle date/time fields based on all_day flag
       if (formData.all_day) {
         // All-day event - use date-only format with midnight times
         if (formData.start_date) {
@@ -313,6 +351,40 @@ export function ObjectiveForm({
       setError(err.message || "Failed to delete objective");
     }
     setDeleting(false);
+  };
+
+  const handleAllDayToggle = (checked: boolean) => {
+    setFormData(prev => {
+      const newData = { ...prev, all_day: checked };
+      
+      if (checked) {
+        // Switching to all-day: convert datetime fields to date fields
+        if (prev.start_time) {
+          newData.start_date = formatDateOnly(new Date(prev.start_time));
+          newData.start_time = "";
+        }
+        if (prev.end_time) {
+          newData.due_date = formatDateOnly(new Date(prev.end_time));
+          newData.end_time = "";
+        }
+      } else {
+        // Switching to timed: convert date fields to datetime fields
+        if (prev.start_date) {
+          const startDateTime = new Date(prev.start_date);
+          startDateTime.setHours(9, 0, 0, 0); // Default to 9:00 AM
+          newData.start_time = formatDateTimeLocal(startDateTime);
+          newData.start_date = "";
+        }
+        if (prev.due_date) {
+          const endDateTime = new Date(prev.due_date);
+          endDateTime.setHours(17, 0, 0, 0); // Default to 5:00 PM
+          newData.end_time = formatDateTimeLocal(endDateTime);
+          newData.due_date = "";
+        }
+      }
+      
+      return newData;
+    });
   };
 
   const isEdit = !!initialData?.id;
@@ -401,7 +473,7 @@ export function ObjectiveForm({
         <Switch
           id="all-day"
           checked={formData.all_day}
-          onCheckedChange={(checked) => setFormData({ ...formData, all_day: checked })}
+          onCheckedChange={handleAllDayToggle}
         />
         <Label htmlFor="all-day">All-day event</Label>
       </div>
