@@ -15,7 +15,7 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 from langchain_core.callbacks import CallbackManagerForLLMRun, AsyncCallbackManagerForLLMRun
 
 from .quota_manager import get_quota_manager, QuotaManager
-
+import asyncio
 logger = logging.getLogger(__name__)
 
 
@@ -36,9 +36,12 @@ class QuotaAwareLLMFactory:
         except RuntimeError:
             logger.warning("⚠️ Quota manager not available, using standard LLM")
     
-    async def create_working_llm(self) -> ChatGoogleGenerativeAI:
+    async def create_working_llm(self, pause_callback=None) -> ChatGoogleGenerativeAI:
         """
         Create an LLM instance with a working API key.
+        
+        Args:
+            pause_callback: Optional callback for quota pause notifications
         
         Returns:
             ChatGoogleGenerativeAI instance with a working API key
@@ -48,7 +51,7 @@ class QuotaAwareLLMFactory:
             return ChatGoogleGenerativeAI(**self.default_kwargs)
         
         # Check if we need to wait for rate limit management
-        await self.quota_manager.check_and_wait_if_needed()
+        await self.quota_manager.check_and_wait_if_needed(pause_callback)
         
         # Try to find a working API key
         max_attempts = len(self.quota_manager.api_keys)
@@ -91,9 +94,9 @@ class QuotaAwareLLMFactory:
         # If we get here, all keys are exhausted
         raise Exception("All API keys have reached their quotas. Please try again later or upgrade your plan.")
     
-    async def get_working_llm(self) -> ChatGoogleGenerativeAI:
+    async def get_working_llm(self, pause_callback=None) -> ChatGoogleGenerativeAI:
         """Get a working LLM instance, alias for create_working_llm."""
-        return await self.create_working_llm()
+        return await self.create_working_llm(pause_callback)
 
 
 class QuotaAwareChatGoogleGenerativeAI:
@@ -109,9 +112,9 @@ class QuotaAwareChatGoogleGenerativeAI:
         self._current_llm = None
         self.last_token_usage = {'input': 0, 'output': 0, 'total': 0}
     
-    async def _get_working_llm(self) -> ChatGoogleGenerativeAI:
+    async def _get_working_llm(self, pause_callback=None) -> ChatGoogleGenerativeAI:
         """Get a working LLM instance."""
-        return await self.factory.create_working_llm()
+        return await self.factory.create_working_llm(pause_callback)
     
     def _capture_token_usage(self, response):
         """Capture token usage from LLM response."""

@@ -264,9 +264,9 @@ export default function Home() {
                          )}>
                            {task.title}
                          </p>
-                         {(task as any).start_time && (
+                         {!task.all_day && task.start_date && (
                            <p className="text-xs text-muted-foreground">
-                             {new Date(`2024-01-01 ${(task as any).start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                             {new Date(task.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                            </p>
                          )}
                        </div>

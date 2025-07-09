@@ -61,44 +61,69 @@ class StreamingAgentGraph(AgentGraph):
         self.event_queue = asyncio.Queue()
         self.streaming_active = False
         self.current_execution_id = None
+        self.current_thread_id = None
+        self.current_exchange_id = None
         self.final_response_emitted = False
         self.original_planning_agent_method = None
         self.original_executor_agent_method = None
+        
+        # Store tool calls to associate with results
+        self.pending_tool_calls = {}  # tool_call_id -> {tool_name, tool_args, agent}
     
-
-
     async def emit_event(self, event: Dict[str, Any]):
         """Emit a streaming event"""
         if self.streaming_active:
             event['timestamp'] = datetime.now().isoformat()
             event['execution_id'] = self.current_execution_id
+            
+            # Put event in queue with immediate notification
             await self.event_queue.put(event)
+            
+            # Also store streaming events in memory system
+            if self.current_thread_id and self.current_exchange_id:
+                await self.memory_system.add_streaming_event(
+                    self.current_thread_id,
+                    self.current_exchange_id,
+                    event.get('type', 'unknown'),
+                    event.get('agent', 'system'),
+                    event.get('content', ''),
+                    event
+                )
     
     async def process_user_input_streaming(self, user_input: str, thread_id: Optional[str] = None):
         """Process user input with streaming events"""
         self.streaming_active = True
         self.current_execution_id = str(uuid.uuid4())
-        self.final_response_emitted = False  # Reset flag for each request
+        self.final_response_emitted = False
+        self.pending_tool_calls = {}  # Reset for new execution
         
         try:
             logger.info(f"🎬 StreamingAgentGraph: Starting processing for: {user_input[:100]}...")
-            
-            # Emit start event
-            await self.emit_event({
-                'type': 'execution_start',
-                'message': user_input,
-                'thread_id': thread_id
-            })
             
             # Create or get thread ID
             if not thread_id:
                 thread_id = await self.memory_system.create_new_thread()
                 logger.info(f"🆕 Created new thread: {thread_id}")
             
+            self.current_thread_id = thread_id
+            
+            # Start new exchange
+            exchange_id = await self.memory_system.start_new_exchange(thread_id, user_input)
+            self.current_exchange_id = exchange_id
+            
+            # Emit start event
+            await self.emit_event({
+                'type': 'execution_start',
+                'message': user_input,
+                'thread_id': thread_id,
+                'exchange_id': exchange_id
+            })
+            
             # Emit initialization event
             await self.emit_event({
                 'type': 'initialization',
                 'thread_id': thread_id,
+                'exchange_id': exchange_id,
                 'user_input': user_input
             })
             
@@ -109,12 +134,16 @@ class StreamingAgentGraph(AgentGraph):
             final_response = await self._process_with_streaming(user_input, thread_id)
             logger.info(f"✅ StreamingAgentGraph: Processing complete, final response: {final_response[:100]}...")
             
+            # Store final response in memory
+            await self.memory_system.set_final_response(thread_id, exchange_id, final_response)
+            
             # Only emit final response if we haven't already emitted a real one from final_response_to_user tool
             if not self.final_response_emitted:
                 await self.emit_event({
                     'type': 'final_response',
                     'response': final_response,
-                    'thread_id': thread_id
+                    'thread_id': thread_id,
+                    'exchange_id': exchange_id
                 })
                 logger.info("📤 Emitted fallback final response")
             else:
@@ -124,6 +153,7 @@ class StreamingAgentGraph(AgentGraph):
             await self.emit_event({
                 'type': 'execution_complete',
                 'thread_id': thread_id,
+                'exchange_id': exchange_id,
                 'success': True
             })
             
@@ -134,11 +164,13 @@ class StreamingAgentGraph(AgentGraph):
             await self.emit_event({
                 'type': 'execution_error',
                 'error': str(e),
-                'thread_id': thread_id
+                'thread_id': thread_id,
+                'exchange_id': self.current_exchange_id
             })
             raise
         finally:
             self.streaming_active = False
+            self.pending_tool_calls = {}
             self._restore_original_methods()
     
     async def _process_with_streaming(self, user_input: str, thread_id: str) -> str:
@@ -174,11 +206,13 @@ class StreamingAgentGraph(AgentGraph):
     async def _emit_chunk_events(self, chunk: Dict[str, Any]):
         """Emit detailed events for each chunk"""
         for node_name, node_data in chunk.items():
+            agent = self._get_agent_from_node(node_name)
+            
             # Emit node start
             await self.emit_event({
                 'type': 'node_start',
                 'node': node_name,
-                'agent': self._get_agent_from_node(node_name)
+                'agent': agent
             })
             
             # Process messages in the chunk
@@ -190,7 +224,7 @@ class StreamingAgentGraph(AgentGraph):
             await self.emit_event({
                 'type': 'node_complete',
                 'node': node_name,
-                'agent': self._get_agent_from_node(node_name)
+                'agent': agent
             })
     
     async def _emit_message_events(self, message, node_name: str):
@@ -206,6 +240,18 @@ class StreamingAgentGraph(AgentGraph):
             
             logger.info(f"🔍 AI Message content type: {type(content)}")
             logger.info(f"🔍 AI Message content preview: {str(content)[:200]}")
+            
+            # Store agent message in memory system
+            if self.current_thread_id and self.current_exchange_id:
+                await self.memory_system.add_agent_message(
+                    self.current_thread_id,
+                    self.current_exchange_id,
+                    agent,
+                    str(content),
+                    "response",
+                    "",  # thinking content captured separately
+                    tool_calls
+                )
             
             # Handle content - thinking is now captured directly in agent overrides
             if isinstance(content, list):
@@ -241,15 +287,27 @@ class StreamingAgentGraph(AgentGraph):
                     'total_tokens': usage_metadata.get('total_tokens', 0)
                 })
             
-            # Emit individual tool calls
+            # Emit individual tool calls and store them for later association with results
             for tool_call in tool_calls:
+                tool_call_id = tool_call.get('id')
+                tool_name = tool_call.get('name')
+                tool_args = tool_call.get('args', {})
+                
+                # Store tool call for later association with result
+                if tool_call_id:
+                    self.pending_tool_calls[tool_call_id] = {
+                        'tool_name': tool_name,
+                        'tool_args': tool_args,
+                        'agent': agent
+                    }
+                
                 await self.emit_event({
                     'type': 'tool_call',
                     'agent': agent,
-                    'tool_name': tool_call.get('name'),
-                    'tool_id': tool_call.get('id'),
-                    'tool_args': tool_call.get('args', {}),
-                    'tool_call_id': tool_call.get('id')  # Use the actual tool call ID to prevent duplicates
+                    'tool_name': tool_name,
+                    'tool_id': tool_call_id,
+                    'tool_args': tool_args,
+                    'tool_call_id': tool_call_id
                 })
         
         elif msg_type == 'ToolMessage':
@@ -258,12 +316,47 @@ class StreamingAgentGraph(AgentGraph):
             tool_content = getattr(message, 'content', '')
             tool_call_id = getattr(message, 'tool_call_id', 'unknown')
             
+            # Get associated tool call data
+            tool_call_data = self.pending_tool_calls.get(tool_call_id, {})
+            tool_args = tool_call_data.get('tool_args', {})
+            
+            # Store enhanced tool result in memory system
+            if self.current_thread_id and self.current_exchange_id:
+                # Create enhanced agent message with tool args
+                message_obj = await self.memory_system.add_agent_message(
+                    self.current_thread_id,
+                    self.current_exchange_id,
+                    agent,
+                    tool_content,
+                    "tool_result",
+                    "",
+                    [{"name": tool_name, "call_id": tool_call_id}]
+                )
+                
+                # If we got the message object back, enhance it with tool args
+                if message_obj:
+                    message_obj.tool_args = tool_args
+                    message_obj.tool_name = tool_name
+                    message_obj.tool_call_id = tool_call_id
+                    
+                    # Save the enhanced message
+                    history = await self.memory_system.get_conversation_history(self.current_thread_id)
+                    await self.memory_system.save_conversation_history(history)
+            
             # Check if this is a final response tool
             if tool_name == 'final_response_to_user':
                 try:
                     result_data = json.loads(tool_content)
                     final_response_content = result_data.get('response_content', '')
                     if final_response_content:
+                        # Store the final response in memory
+                        if self.current_thread_id and self.current_exchange_id:
+                            await self.memory_system.set_final_response(
+                                self.current_thread_id, 
+                                self.current_exchange_id, 
+                                final_response_content
+                            )
+                        
                         # Emit the actual final response
                         await self.emit_event({
                             'type': 'final_response',
@@ -281,9 +374,14 @@ class StreamingAgentGraph(AgentGraph):
                 'agent': agent,
                 'tool_name': tool_name,
                 'tool_call_id': tool_call_id,
+                'tool_args': tool_args,  # Include tool args in the event
                 'result': tool_content,
                 'tool_result_id': str(uuid.uuid4())
             })
+            
+            # Clean up the pending tool call
+            if tool_call_id in self.pending_tool_calls:
+                del self.pending_tool_calls[tool_call_id]
         
         elif msg_type == 'HumanMessage':
             content = getattr(message, 'content', '')
@@ -322,40 +420,36 @@ class StreamingAgentGraph(AgentGraph):
         
         return "Task completed successfully."
     
-    def _extract_final_response(self, final_result: Dict[str, Any]) -> str:
-        """Extract final response from the graph result"""
-        # Check if final response content is in state
-        final_response_content = final_result.get('final_response_content', '')
-        if final_response_content:
-            return final_response_content
-        
-        # Fallback to extracting from messages
-        messages = final_result.get('messages', [])
-        for msg in reversed(messages):
-            if hasattr(msg, 'content') and msg.content:
-                # Check if it's a tool result with final response
-                if hasattr(msg, 'name') and msg.name == 'final_response_to_user':
-                    try:
-                        result_data = json.loads(msg.content)
-                        return result_data.get('response_content', msg.content)
-                    except:
-                        return msg.content
-                # Check if it's an AI message
-                elif hasattr(msg, 'content') and len(str(msg.content)) > 50:
-                    return str(msg.content)
-        
-        return "No final response found in execution result."
-    
     def _setup_streaming_overrides(self):
-        """Override agent methods to capture original thinking content"""
+        """Override agent methods to capture thinking content"""
         # Store original methods
         self.original_planning_agent_method = self.planning_agent.ainvoke
         self.original_executor_agent_method = self.executor_agent.ainvoke
         
+        # Create quota pause callback
+        async def quota_pause_callback(event_type, data):
+            if self.streaming_active:
+                await self.emit_event({
+                    'type': event_type,
+                    'agent': 'system',
+                    'data': data
+                })
+        
         # Create wrapper methods that capture original thinking
         async def streaming_planning_agent(messages):
             logger.info("🎬 Streaming planning agent override called")
+            
+            # If the planning agent uses quota-aware LLM, pass the callback
+            if hasattr(self.planning_llm, '_get_working_llm'):
+                # This is a quota-aware LLM, pass the callback
+                original_get_working_llm = self.planning_llm._get_working_llm
+                self.planning_llm._get_working_llm = lambda: original_get_working_llm(quota_pause_callback)
+            
             original_response = await self.original_planning_agent_method(messages)
+            
+            # Restore original method
+            if hasattr(self.planning_llm, '_get_working_llm'):
+                self.planning_llm._get_working_llm = original_get_working_llm
             
             # Capture original thinking content before filtering
             if hasattr(original_response, 'content') and isinstance(original_response.content, list):
@@ -365,13 +459,26 @@ class StreamingAgentGraph(AgentGraph):
                     if isinstance(part, dict) and part.get("type") == "thinking" and part.get("thinking")
                 ]
                 
-                # Emit thinking events
+                # Store thinking in memory system and emit events
                 for thought in thoughts:
+                    thinking_id = str(uuid.uuid4())
+                    
+                    # Store in memory system
+                    if self.current_thread_id and self.current_exchange_id:
+                        await self.memory_system.add_agent_message(
+                            self.current_thread_id,
+                            self.current_exchange_id,
+                            'planning',
+                            thought,
+                            "thinking"
+                        )
+                    
+                    # Emit thinking event
                     await self.emit_event({
                         'type': 'thinking',
                         'agent': 'planning',
                         'content': thought,
-                        'thinking_id': str(uuid.uuid4())
+                        'thinking_id': thinking_id
                     })
                     logger.info(f"💭 Emitted planning thinking: {thought[:100]}...")
             
@@ -379,7 +486,18 @@ class StreamingAgentGraph(AgentGraph):
         
         async def streaming_executor_agent(messages):
             logger.info("🎬 Streaming executor agent override called")
+            
+            # If the executor agent uses quota-aware LLM, pass the callback
+            if hasattr(self.executor_llm, '_get_working_llm'):
+                # This is a quota-aware LLM, pass the callback
+                original_get_working_llm = self.executor_llm._get_working_llm
+                self.executor_llm._get_working_llm = lambda: original_get_working_llm(quota_pause_callback)
+            
             original_response = await self.original_executor_agent_method(messages)
+            
+            # Restore original method
+            if hasattr(self.executor_llm, '_get_working_llm'):
+                self.executor_llm._get_working_llm = original_get_working_llm
             
             # Capture original thinking content before filtering
             if hasattr(original_response, 'content') and isinstance(original_response.content, list):
@@ -389,13 +507,26 @@ class StreamingAgentGraph(AgentGraph):
                     if isinstance(part, dict) and part.get("type") == "thinking" and part.get("thinking")
                 ]
                 
-                # Emit thinking events
+                # Store thinking in memory system and emit events
                 for thought in thoughts:
+                    thinking_id = str(uuid.uuid4())
+                    
+                    # Store in memory system
+                    if self.current_thread_id and self.current_exchange_id:
+                        await self.memory_system.add_agent_message(
+                            self.current_thread_id,
+                            self.current_exchange_id,
+                            'executor',
+                            thought,
+                            "thinking"
+                        )
+                    
+                    # Emit thinking event
                     await self.emit_event({
                         'type': 'thinking',
                         'agent': 'executor',
                         'content': thought,
-                        'thinking_id': str(uuid.uuid4())
+                        'thinking_id': thinking_id
                     })
                     logger.info(f"💭 Emitted executor thinking: {thought[:100]}...")
             
@@ -448,6 +579,7 @@ async def chat_with_agent_streaming(request: StreamingChatRequest) -> StreamingR
     including thoughts, tool calls, and results.
     """
     async def generate_events():
+        agent = None
         try:
             # Get streaming agent
             agent = get_streaming_agent_graph()
@@ -471,18 +603,25 @@ async def chat_with_agent_streaming(request: StreamingChatRequest) -> StreamingR
             # Start processing
             processing_task = asyncio.create_task(stream_processing())
             
+            # Track heartbeat timing
+            last_heartbeat = asyncio.get_event_loop().time()
+            heartbeat_interval = 30  # Send heartbeat every 30 seconds if no events
+            
             # Stream events as they come
             while True:
                 try:
-                    # Wait for next event with timeout
-                    event = await asyncio.wait_for(agent.event_queue.get(), timeout=0.1)
+                    # Use longer timeout for event waiting to avoid unnecessary heartbeats
+                    event = await asyncio.wait_for(agent.event_queue.get(), timeout=5.0)
                     
                     # Log event for debugging
                     logger.info(f"📡 SSE Event: {event.get('type')} - {event.get('agent', 'system')}")
                     
-                    # Format as SSE
+                    # Format as SSE and yield immediately
                     event_data = json.dumps(event)
                     yield f"data: {event_data}\n\n"
+                    
+                    # Update heartbeat timing
+                    last_heartbeat = asyncio.get_event_loop().time()
                     
                     # Check if execution is complete
                     if event.get('type') in ['execution_complete', 'execution_error']:
@@ -490,8 +629,11 @@ async def chat_with_agent_streaming(request: StreamingChatRequest) -> StreamingR
                         break
                         
                 except asyncio.TimeoutError:
-                    # Send heartbeat
-                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                    # Check if we need to send a heartbeat
+                    current_time = asyncio.get_event_loop().time()
+                    if current_time - last_heartbeat >= heartbeat_interval:
+                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+                        last_heartbeat = current_time
                     
                     # Check if processing is done
                     if processing_task.done():
@@ -538,7 +680,8 @@ async def chat_with_agent_streaming(request: StreamingChatRequest) -> StreamingR
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type"
+            "Access-Control-Allow-Headers": "Content-Type",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
         }
     )
 
@@ -597,7 +740,7 @@ async def get_conversation_history(thread_id: str) -> Dict[str, Any]:
     """
     try:
         memory_system = MemorySystem()
-        
+     
         # Get the actual conversation history with exchanges
         history = await memory_system.get_conversation_history(thread_id)
         
@@ -614,6 +757,51 @@ async def get_conversation_history(thread_id: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get conversation history: {str(e)}"
+        )
+
+
+@router.get("/conversation/{thread_id}/detailed")
+async def get_detailed_conversation_history(thread_id: str) -> Dict[str, Any]:
+    """
+    Get detailed conversation history including agent messages and streaming events.
+    """
+    try:
+        memory_system = MemorySystem()
+        
+        # Get the actual conversation history with exchanges
+        history = await memory_system.get_conversation_history(thread_id)
+        
+        # Transform to detailed format for frontend
+        detailed_exchanges = []
+        for exchange in history.exchanges:
+            detailed_exchange = {
+                "id": exchange.id,
+                "user_message": exchange.user_message,
+                "planner_summary": exchange.planner_summary,
+                "executor_summary": exchange.executor_summary,
+                "final_response": exchange.final_response,
+                "timestamp": exchange.timestamp,
+                "is_complete": exchange.is_complete,
+                "agent_messages": [msg.to_dict() for msg in exchange.agent_messages],
+                "streaming_events": [event.to_dict() for event in exchange.streaming_events],
+                "execution_metadata": exchange.execution_metadata
+            }
+            detailed_exchanges.append(detailed_exchange)
+        
+        return {
+            "success": True,
+            "thread_id": thread_id,
+            "exchanges": detailed_exchanges,
+            "message_count": len(history.exchanges),
+            "last_updated": history.last_updated,
+            "created_at": history.created_at
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Error getting detailed conversation history: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get detailed conversation history: {str(e)}"
         )
 
 

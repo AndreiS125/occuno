@@ -51,8 +51,6 @@ export interface Objective {
 }
 
 export interface Task extends Objective {
-  start_time?: string;
-  end_time?: string;
   location?: string;
   estimated_duration?: number; // in minutes
   actionable_steps: string[];

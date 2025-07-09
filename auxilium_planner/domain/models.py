@@ -96,8 +96,6 @@ class Objective(BaseObjective):
 
 class Task(BaseObjective):
     objective_type: ObjectiveType = ObjectiveType.TASK
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
     location: Optional[str] = None
     
     estimated_duration: Optional[timedelta] = None
