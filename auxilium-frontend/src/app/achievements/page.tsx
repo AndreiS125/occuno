@@ -11,15 +11,32 @@ import {
   Calendar,
   CheckCircle,
   Lock,
-  Award
+  Award,
+  Gift,
+  Flame,
+  TrendingUp,
+  Crown,
+  Sparkles,
+  Timer,
+  AlertTriangle,
+  Users,
+  Ticket
 } from "lucide-react";
 import { userApi } from "@/lib/api";
 import toast from "react-hot-toast";
+import { Button } from "@/components/ui/button";
+import { motion, AnimatePresence } from "framer-motion";
+import { MysteryBoxRealistic } from "@/components/ui";
+import { GamificationExplainer } from "@/components/ui/gamification-explainer";
 
 export default function AchievementsPage() {
   const [userStats, setUserStats] = useState<any>(null);
+  const [dailyStatus, setDailyStatus] = useState<any>(null);
   const [achievementDefinitions, setAchievementDefinitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mysteryBoxOpening, setMysteryBoxOpening] = useState(false);
+  const [lastReward, setLastReward] = useState<any>(null);
+  const [showMysteryBox3D, setShowMysteryBox3D] = useState(false);
   
   // Refs for GSAP animations
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,16 +46,21 @@ export default function AchievementsPage() {
 
   useEffect(() => {
     fetchData();
+    // Refresh data every 30 seconds to keep psychological hooks fresh
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
     try {
-      const [stats, definitions] = await Promise.all([
-        userApi.getGamificationStats(),
+      const [enhancedStats, dailyStatusData, definitions] = await Promise.all([
+        userApi.getEnhancedGamificationStats(),
+        userApi.getDailyStatus(),
         userApi.getAchievementDefinitions()
       ]);
       
-      setUserStats(stats);
+      setUserStats(enhancedStats);
+      setDailyStatus(dailyStatusData);
       
       // Map backend definitions to frontend format with icons and colors
       const mappedDefinitions = definitions.map((def: any) => ({
@@ -59,6 +81,30 @@ export default function AchievementsPage() {
     }
   };
 
+  const handleOpenMysteryBox = () => {
+    if (mysteryBoxOpening || !userStats?.mystery_boxes_available || userStats.mystery_boxes_available <= 0) {
+      return;
+    }
+    setShowMysteryBox3D(true);
+  };
+
+  const handle3DMysteryBoxOpen = async () => {
+    const result = await userApi.openMysteryBox();
+    
+    if (result.success) {
+      setLastReward(result);
+      // Refresh data to show new stats
+      setTimeout(fetchData, 1000);
+      return result;
+    } else {
+      throw new Error(result.message || "No mystery boxes available");
+    }
+  };
+
+  const handle3DMysteryBoxClose = () => {
+    setShowMysteryBox3D(false);
+  };
+
   // Helper functions to map achievement IDs to UI elements
   const getIconForAchievement = (id: string) => {
     const iconMap: { [key: string]: any } = {
@@ -68,7 +114,9 @@ export default function AchievementsPage() {
       streak_starter: Zap,
       week_warrior: Calendar,
       planning_pro: Star,
-      early_bird: Award
+      early_bird: Award,
+      perfectionist: Crown,
+      comeback_king: TrendingUp
     };
     return iconMap[id] || Trophy;
   };
@@ -81,7 +129,9 @@ export default function AchievementsPage() {
       streak_starter: "text-orange-500",
       week_warrior: "text-red-500",
       planning_pro: "text-yellow-500",
-      early_bird: "text-cyan-500"
+      early_bird: "text-cyan-500",
+      perfectionist: "text-pink-500",
+      comeback_king: "text-indigo-500"
     };
     return colorMap[id] || "text-gray-500";
   };
@@ -94,14 +144,16 @@ export default function AchievementsPage() {
       streak_starter: "bg-orange-100 dark:bg-orange-900/20",
       week_warrior: "bg-red-100 dark:bg-red-900/20",
       planning_pro: "bg-yellow-100 dark:bg-yellow-900/20",
-      early_bird: "bg-cyan-100 dark:bg-cyan-900/20"
+      early_bird: "bg-cyan-100 dark:bg-cyan-900/20",
+      perfectionist: "bg-pink-100 dark:bg-pink-900/20",
+      comeback_king: "bg-indigo-100 dark:bg-indigo-900/20"
     };
     return bgColorMap[id] || "bg-gray-100 dark:bg-gray-900/20";
   };
 
-  const unlockedAchievements = userStats?.achievements?.recent || [];
+  const unlockedAchievements = userStats?.recent_achievements || [];
   const totalScore = userStats?.overall_score || 0;
-  const currentStreak = userStats?.current_streak?.days || 0;
+  const currentStreak = userStats?.current_streak || 0;
 
   // Check if achievement is unlocked
   const isUnlocked = (achievementId: string) => {
@@ -127,6 +179,19 @@ export default function AchievementsPage() {
       }
     );
 
+    // Psychological cards
+    tl.fromTo(".psych-card",
+      { opacity: 0, x: -20 },
+      { 
+        opacity: 1, 
+        x: 0, 
+        duration: 0.4, 
+        stagger: 0.08,
+        ease: "power2.out" 
+      },
+      "-=0.3"
+    );
+
     // Achievement cards with stagger
     tl.fromTo(".achievement-card",
       { opacity: 0, scale: 0.9 },
@@ -137,26 +202,19 @@ export default function AchievementsPage() {
         stagger: 0.05,
         ease: "back.out(1.2)" 
       },
-      "-=0.3"
-    );
-
-    // Progress section
-    tl.fromTo(progressRef.current,
-      { opacity: 0, y: 20 },
-      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" },
       "-=0.2"
     );
 
-    // Hover animations for unlocked achievements
-    const unlockedCards = document.querySelectorAll(".achievement-card.unlocked");
-    unlockedCards.forEach(card => {
-      card.addEventListener("mouseenter", () => {
-        gsap.to(card, { scale: 1.02, duration: 0.2, ease: "power2.out" });
+    // Mystery box pulsing animation
+    if (userStats?.mystery_boxes_available > 0) {
+      gsap.to(".mystery-box", {
+        scale: 1.05,
+        duration: 1.2,
+        ease: "power2.inOut",
+        yoyo: true,
+        repeat: -1
       });
-      card.addEventListener("mouseleave", () => {
-        gsap.to(card, { scale: 1, duration: 0.2, ease: "power2.out" });
-      });
-    });
+    }
 
   }, { dependencies: [loading, unlockedAchievements.length] });
 
@@ -170,28 +228,203 @@ export default function AchievementsPage() {
 
   return (
     <div ref={containerRef} className="container mx-auto px-4 py-8">
-      {/* Stats Overview */}
-      <div ref={statsRef} className="grid md:grid-cols-3 gap-4 mb-8">
+      {/* Page Header with Explainer */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">🏆 Achievements</h1>
+          <p className="text-muted-foreground">Track your progress and unlock rewards</p>
+        </div>
+        <GamificationExplainer />
+      </div>
+
+      {/* Enhanced Stats Overview */}
+      <div ref={statsRef} className="grid md:grid-cols-4 gap-4 mb-8">
         <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
           <Award className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
           <p className="text-3xl font-bold mb-1">{totalScore}</p>
-          <p className="text-muted-foreground">Total Points</p>
+          <p className="text-muted-foreground">Total Score</p>
+          <p className="text-xs text-green-600 mt-1">Lifetime: {userStats?.lifetime_score || 0}</p>
         </div>
 
         <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
-          <Zap className="w-12 h-12 text-orange-500 mx-auto mb-2" />
+          <div className="flex items-center justify-center mb-2">
+            <Flame className="w-12 h-12 text-orange-500" />
+            {userStats?.streak_multiplier > 1 && (
+              <span className="ml-1 text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                {userStats.streak_multiplier}x
+              </span>
+            )}
+          </div>
           <p className="text-3xl font-bold mb-1">{currentStreak}</p>
-          <p className="text-muted-foreground">Day Streak</p>
+          <p className="text-muted-foreground">Current Streak</p>
+          <p className="text-xs text-blue-600 mt-1">Best: {userStats?.longest_streak || 0}</p>
         </div>
 
         <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
-          <Trophy className="w-12 h-12 text-purple-500 mx-auto mb-2" />
+          <Crown className="w-12 h-12 text-purple-500 mx-auto mb-2" />
+          <p className="text-3xl font-bold mb-1">#{userStats?.rank_this_week || 1}</p>
+          <p className="text-muted-foreground">Weekly Rank</p>
+          <p className="text-xs text-purple-600 mt-1">Season #{userStats?.competitive_season || 1}</p>
+        </div>
+
+        <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
+          <Trophy className="w-12 h-12 text-blue-500 mx-auto mb-2" />
           <p className="text-3xl font-bold mb-1">
             {unlockedAchievements.length}/{achievementDefinitions.length}
           </p>
           <p className="text-muted-foreground">Achievements</p>
+          <p className="text-xs text-green-600 mt-1">Level {userStats?.level || 1}</p>
         </div>
       </div>
+
+      {/* Psychological Engagement Cards */}
+      <div className="grid md:grid-cols-3 gap-4 mb-8">
+        {/* Daily Status & Urgency */}
+        <div className="psych-card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10 border border-blue-200 dark:border-blue-700 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <Timer className="w-8 h-8 text-blue-600" />
+            {dailyStatus?.urgency_factors?.deadline_approaching && (
+              <AlertTriangle className="w-6 h-6 text-red-500 animate-pulse" />
+            )}
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Daily Progress</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Tasks Today</span>
+              <span className="font-medium">{dailyStatus?.daily_tasks_completed || 0}/{dailyStatus?.daily_task_goal || 3}</span>
+            </div>
+                            <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${Math.min(((dailyStatus?.daily_tasks_completed || 0) / (dailyStatus?.daily_task_goal || 3)) * 100, 100)}%` 
+                    }}
+                  />
+                </div>
+            {dailyStatus?.daily_bonus_available && (
+              <p className="text-xs text-blue-700 font-medium">🎁 Daily bonus ready!</p>
+            )}
+            {dailyStatus?.decay_warning && (
+              <p className="text-xs text-red-600 font-medium animate-pulse">⚠️ Progress at risk!</p>
+            )}
+          </div>
+        </div>
+
+        {/* Mystery Sphere & Variable Rewards */}
+        <div className="psych-card bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-800/10 border border-purple-200 dark:border-purple-700 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <Sparkles className="w-8 h-8 text-purple-600" />
+            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+              {userStats?.mystery_boxes_available || 0} Available
+            </span>
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Mystery Spheres</h3>
+          <Button
+            onClick={handleOpenMysteryBox}
+            disabled={mysteryBoxOpening || !userStats?.mystery_boxes_available || userStats.mystery_boxes_available <= 0}
+            className={`w-full mystery-box ${userStats?.mystery_boxes_available > 0 ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700' : ''}`}
+          >
+            {mysteryBoxOpening ? (
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                Opening Sphere...
+              </div>
+            ) : userStats?.mystery_boxes_available > 0 ? (
+              <div className="flex items-center">
+                <Sparkles className="w-4 h-4 mr-2" />
+                Touch Mystery Sphere
+              </div>
+            ) : (
+              "Complete tasks to earn spheres"
+            )}
+          </Button>
+        </div>
+
+        {/* Social Competition */}
+        <div className="psych-card bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/10 border border-green-200 dark:border-green-700 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <Users className="w-8 h-8 text-green-600" />
+            <div className="text-right">
+              <p className="text-xs text-green-600">Season Rank</p>
+              <p className="font-bold text-green-800">#{userStats?.seasonal_rank || 1}</p>
+            </div>
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Competition</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>This Week</span>
+              <span className="font-medium">#{userStats?.rank_this_week || 1}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Last Week</span>
+              <span className={`font-medium ${(userStats?.rank_this_week || 1) < (userStats?.rank_last_week || 1) ? 'text-green-600' : 'text-red-600'}`}>
+                #{userStats?.rank_last_week || 1}
+                {(userStats?.rank_this_week || 1) < (userStats?.rank_last_week || 1) ? ' ↗️' : ' ↘️'}
+              </span>
+            </div>
+            {userStats?.comeback_bonus_available && (
+              <p className="text-xs text-green-700 font-medium">💪 Comeback bonus active!</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Level Progress */}
+      <div className="bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 rounded-xl p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold">Level {userStats?.level || 1}</h3>
+            <p className="text-muted-foreground">
+              {userStats?.experience_points || 0} / {userStats?.experience_to_next_level || 100} XP
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Progress</p>
+            <p className="text-2xl font-bold text-primary">
+              {Math.round(((userStats?.experience_points || 0) / (userStats?.experience_to_next_level || 100)) * 100)}%
+            </p>
+          </div>
+        </div>
+        <div className="w-full bg-muted rounded-full h-3">
+          <motion.div 
+            className="bg-gradient-to-r from-primary to-secondary h-3 rounded-full"
+            initial={{ width: 0 }}
+            animate={{ 
+              width: `${Math.round(((userStats?.experience_points || 0) / (userStats?.experience_to_next_level || 100)) * 100)}%` 
+            }}
+            transition={{ duration: 1, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+
+      {/* Near Miss & Psychological Hooks */}
+      {(userStats?.near_miss_count > 0 || dailyStatus?.psychological_hooks) && (
+        <div className="bg-gradient-to-br from-yellow-50 to-orange-100 dark:from-yellow-900/20 dark:to-orange-800/10 border border-yellow-200 dark:border-yellow-700 rounded-xl p-6 mb-8">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <Ticket className="w-5 h-5 mr-2 text-yellow-600" />
+            Motivational Boost
+          </h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            {userStats?.near_miss_count > 0 && (
+              <div className="bg-white/50 rounded-lg p-4">
+                <p className="text-sm font-medium text-yellow-800">🎯 So Close!</p>
+                <p className="text-xs text-yellow-700">
+                  You almost hit {userStats.near_miss_count} major milestone{userStats.near_miss_count > 1 ? 's' : ''}! 
+                  Keep pushing for those breakthrough moments.
+                </p>
+              </div>
+            )}
+            {dailyStatus?.psychological_hooks?.perfectionist_mode && (
+              <div className="bg-white/50 rounded-lg p-4">
+                <p className="text-sm font-medium text-orange-800">💎 Perfectionist Mode</p>
+                <p className="text-xs text-orange-700">
+                  All-or-nothing mindset activated. Complete your daily goal for maximum satisfaction!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Achievements Grid */}
       <div ref={achievementsRef} className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -199,16 +432,18 @@ export default function AchievementsPage() {
           const unlocked = isUnlocked(achievement.id);
           
           return (
-            <div
+            <motion.div
               key={achievement.id}
               className={`
                 achievement-card ${unlocked ? 'unlocked' : ''}
                 relative overflow-hidden rounded-xl p-6 transition-all
                 ${unlocked 
-                  ? "bg-card border-2 border-primary" 
+                  ? "bg-card border-2 border-primary shadow-lg shadow-primary/20" 
                   : "bg-muted/50 border border-border opacity-75"
                 }
               `}
+              whileHover={unlocked ? { scale: 1.02 } : { scale: 1.01 }}
+              transition={{ duration: 0.2 }}
             >
               {/* Background Pattern */}
               {unlocked && (
@@ -226,6 +461,11 @@ export default function AchievementsPage() {
                   {!unlocked && (
                     <Lock className="w-5 h-5 text-muted-foreground" />
                   )}
+                  {unlocked && (
+                    <div className="text-primary animate-pulse">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                  )}
                 </div>
 
                 <h3 className="text-lg font-semibold mb-2">{achievement.name}</h3>
@@ -238,13 +478,13 @@ export default function AchievementsPage() {
                     {achievement.points} points
                   </span>
                   {unlocked && (
-                    <span className="text-xs text-primary font-medium">
-                      UNLOCKED
+                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
+                      UNLOCKED ✨
                     </span>
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -254,20 +494,47 @@ export default function AchievementsPage() {
         ref={progressRef}
         className="mt-12 bg-card border border-border rounded-xl p-8 text-center"
       >
-        <h2 className="text-2xl font-bold mb-4">Keep Going!</h2>
+        <h2 className="text-2xl font-bold mb-4">Keep Going! 🚀</h2>
         <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-          You&apos;re making great progress! Continue completing objectives to unlock more achievements
-          and increase your score. Every small step counts towards your bigger goals.
+          You're making incredible progress! The psychological momentum is building. 
+          Every task completed brings you closer to that next dopamine hit. Don't break the chain!
         </p>
         
-        <div className="flex items-center justify-center space-x-2">
-          <Star className="w-5 h-5 text-yellow-500" />
-          <Star className="w-5 h-5 text-yellow-500" />
-          <Star className="w-5 h-5 text-yellow-500" />
-          <Star className="w-5 h-5 text-muted-foreground" />
-          <Star className="w-5 h-5 text-muted-foreground" />
+        <div className="flex items-center justify-center space-x-2 mb-4">
+          {[...Array(5)].map((_, i) => (
+            <Star 
+              key={i}
+              className={`w-5 h-5 ${i < Math.floor((userStats?.progress_to_next_level || 0) * 5) ? 'text-yellow-500' : 'text-muted-foreground'}`} 
+            />
+          ))}
         </div>
+
+        {/* Urgency messaging for psychological engagement */}
+        {dailyStatus?.urgency_factors && (
+          <div className="mt-6 p-4 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-800/10 border border-red-200 dark:border-red-700 rounded-lg">
+            <h4 className="font-semibold text-red-800 dark:text-red-200 mb-2">⏰ Don't Let This Slip Away!</h4>
+            <div className="text-sm text-red-700 dark:text-red-300 space-y-1">
+              {dailyStatus.urgency_factors.streak_at_risk && (
+                <p>🔥 Your {currentStreak}-day streak is at risk!</p>
+              )}
+              {dailyStatus.urgency_factors.daily_goal_pending && (
+                <p>🎯 Daily goal expires in hours!</p>
+              )}
+              {dailyStatus.urgency_factors.bonus_expiring && (
+                <p>⚡ Active bonuses are about to expire!</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 3D Mystery Box */}
+              <MysteryBoxRealistic 
+        isOpen={showMysteryBox3D}
+        onOpen={handle3DMysteryBoxOpen}
+        onClose={handle3DMysteryBoxClose}
+        modelPath="/models/treasure-chest.glb"
+      />
     </div>
   );
 } 

@@ -266,7 +266,7 @@ async def update_objective(
             # Convert end_date string to datetime if provided
             if recurring_data.get('end_date'):
                 recurring_data['next_occurrence'] = datetime.fromisoformat(recurring_data.pop('end_date'))
-            updates['recurring'] = recurring_data
+            updates['recurring'] = RecurringInfo(**recurring_data)
         
         # Handle estimated_duration conversion for tasks
         if "estimated_duration" in updates and updates["estimated_duration"] is not None:

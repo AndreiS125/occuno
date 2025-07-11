@@ -19,6 +19,8 @@ export * from "./badge";
 export * from "./loading-spinner";
 export * from "./empty-state";
 export * from "./terminology-guide";
+export * from "./gamification-explainer";
+export { default as MysteryBoxRealistic } from './mystery-box-realistic';
 
 // Feedback Components
 export * from "./modern-effects"; 

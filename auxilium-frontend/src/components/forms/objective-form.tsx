@@ -114,8 +114,8 @@ export function ObjectiveForm({
         description: data.description || "",
         objective_type: data.objective_type || defaultType,
         energy_requirement: data.energy_requirement || EnergyLevel.MEDIUM,
-        priority_score: data.priority_score ?? 50,
-        complexity_score: data.complexity_score ?? 50,
+        priority_score: data.priority_score ?? 0.5,
+        complexity_score: data.complexity_score ?? 0.5,
         parent_id: data.parent_id || null,
         start_date: startDate,
         due_date: dueDate,
@@ -123,7 +123,7 @@ export function ObjectiveForm({
         end_time: endTime,
         all_day: data.all_day ?? false,
         location: data.location || "",
-        is_recurring: data.is_recurring || false,
+        is_recurring: !!(data.is_recurring || objRecurring),
         status: data.status || ObjectiveStatus.NOT_STARTED,
         completion_percentage: data.completion_percentage || 0,
         recurring: objRecurring ? {
@@ -147,8 +147,8 @@ export function ObjectiveForm({
       description: "",
       objective_type: defaultType,
       energy_requirement: EnergyLevel.MEDIUM,
-      priority_score: 50,
-      complexity_score: 50,
+      priority_score: 0.5,
+      complexity_score: 0.5,
       parent_id: null,
       start_date: "",
       due_date: "",
@@ -198,9 +198,9 @@ export function ObjectiveForm({
         startDate = data.start_date ? formatDateOnly(new Date(data.start_date)) : "";
         dueDate = data.due_date ? formatDateOnly(new Date(data.due_date)) : "";
       } else {
-        // For timed events, convert stored dates to datetime-local format
-        startTime = data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : "";
-        endTime = data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : "";
+        // For timed events, prioritize start_time/end_time fields from modal, then fall back to converting dates
+        startTime = data.start_time || (data.start_date ? formatDateTimeLocal(new Date(data.start_date)) : "");
+        endTime = data.end_time || (data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : "");
       }
       
       setFormData({
@@ -208,8 +208,8 @@ export function ObjectiveForm({
         description: data.description || "",
         objective_type: data.objective_type || (defaultToTask ? ObjectiveType.TASK : ObjectiveType.MAIN_OBJECTIVE),
         energy_requirement: data.energy_requirement || EnergyLevel.MEDIUM,
-        priority_score: data.priority_score ?? 50,
-        complexity_score: data.complexity_score ?? 50,
+        priority_score: data.priority_score ?? 0.5,
+        complexity_score: data.complexity_score ?? 0.5,
         parent_id: data.parent_id || null,
         start_date: startDate,
         due_date: dueDate,
@@ -217,7 +217,7 @@ export function ObjectiveForm({
         end_time: endTime,
         all_day: data.all_day ?? false,
         location: data.location || "",
-        is_recurring: data.is_recurring || false,
+        is_recurring: !!(data.is_recurring || objRecurring),
         status: data.status || ObjectiveStatus.NOT_STARTED,
         completion_percentage: data.completion_percentage || 0,
         recurring: objRecurring ? {
@@ -314,7 +314,7 @@ export function ObjectiveForm({
         submitData.location = formData.location;
       }
 
-      // Add recurrence data if enabled
+      // Handle recurrence data
       if (formData.is_recurring && formData.recurring) {
         submitData.recurring = {
           frequency: formData.recurring.frequency,
@@ -325,6 +325,9 @@ export function ObjectiveForm({
             formData.recurring.time_of_day || "09:00",
           end_date: formData.recurring.end_date || undefined,
         };
+      } else {
+        // Explicitly set recurring to null when not recurring to clear existing data
+        submitData.recurring = null;
       }
 
       console.log("📝 Submitting data:", submitData);

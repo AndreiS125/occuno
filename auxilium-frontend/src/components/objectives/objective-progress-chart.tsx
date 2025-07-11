@@ -149,7 +149,7 @@ export function ObjectiveProgressChart({ objectives }: ObjectiveProgressChartPro
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{ backgroundColor: typeColors[item.type as keyof typeof typeColors] }}
                 initial={{ width: 0 }}
-                animate={{ width: `${item.percentage}%` }}
+                animate={{ width: `${Math.min(item.percentage || 0, 100)}%` }}
                 transition={{ duration: 0.8, delay: 0.1 * index, ease: "easeOut" }}
               />
             </div>

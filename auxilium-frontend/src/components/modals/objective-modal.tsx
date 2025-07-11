@@ -40,6 +40,7 @@ export function ObjectiveModal({
       if (isEdit) {
         // Update existing objective
         await objectivesApi.update(initialData.id!, data);
+        toast.success("Objective updated successfully! ✅");
       } else {
         // Create new objective
         if (data.objective_type === "task" && showTimeFields) {
@@ -47,6 +48,7 @@ export function ObjectiveModal({
         } else {
           await objectivesApi.create(data);
         }
+        toast.success("Objective created successfully! 🎉");
       }
       
       onSuccess?.();
@@ -61,6 +63,7 @@ export function ObjectiveModal({
   const handleDelete = useCallback(async (id: string) => {
     try {
       await objectivesApi.delete(id);
+      toast.success("Objective deleted successfully! 🗑️");
       onSuccess?.();
       onClose();
     } catch (error) {

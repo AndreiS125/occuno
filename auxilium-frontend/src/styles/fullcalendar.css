@@ -20,23 +20,38 @@
   --fc-list-event-hover-bg-color: hsl(var(--muted));
 }
 
-/* Remove ugly hour mark lines while keeping cleaner half-hour lines */
-.fc-timegrid-slot[data-time$=":00:00"] {
-  border-top: none !important;
-}
-
+/* Hour grid lines only - clean and minimal */
 .fc-timegrid-slot-major {
+  border-top: 1px solid hsl(var(--border) / 0.6) !important;
+}
+
+.fc-timegrid-slot[data-time$=":00:00"] {
+  border-top: 1px solid hsl(var(--border) / 0.6) !important;
+}
+
+/* Remove half-hour lines for cleaner appearance */
+.fc-timegrid-slot-minor {
   border-top: none !important;
 }
 
-/* Keep the subtle half-hour lines */
 .fc-timegrid-slot[data-time$=":30:00"] {
-  border-top: 1px solid hsl(var(--border) / 0.3) !important;
+  border-top: none !important;
 }
 
-.fc-timegrid-slot-minor {
-  border-top: 1px solid hsl(var(--border) / 0.3) !important;
+/* Ensure time axis labels align properly with grid lines */
+.fc-timegrid-axis-cushion {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  padding-right: 0.5rem !important;
+  font-size: 0.75rem !important;
+  color: hsl(var(--muted-foreground)) !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  padding-top: 0 !important;
 }
+
+/* Let FullCalendar use default slot heights for proper time spacing */
 
 /* High-performance drag and drop animations */
 .fc-event-dragging {
@@ -268,8 +283,11 @@
     font-size: 0.75rem !important;
   }
   
-  .fc-timegrid-slot {
-    height: 2rem !important;
+  /* Use default slot heights on mobile for proper spacing */
+  
+  .fc-timegrid-axis-cushion {
+    font-size: 0.625rem !important;
+    padding-right: 0.25rem !important;
   }
 }
 

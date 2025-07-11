@@ -76,7 +76,19 @@ class UserProfileRepository:
     
     async def update_score(self, points: int) -> UserProfile:
         """Add points to user's score (alias for add_points for gamification service compatibility)."""
-        return await self.add_points(points)
+        try:
+            profile = await self.get_default_profile()
+            old_score = profile.overall_score
+            profile.overall_score += points
+            
+            updated_profile = await self.update_profile(profile)
+            self.logger.info(f"🎯 Updated score: {old_score} + {points} = {updated_profile.overall_score}")
+            
+            return updated_profile
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error updating score: {e}")
+            raise
 
     async def update_streak(self, new_streak: int, check_date: datetime = None) -> UserProfile:
         """Update user's streak with optional specific date."""
@@ -148,4 +160,8 @@ class UserProfileRepository:
             
         except Exception as e:
             self.logger.error(f"❌ Error saving user profile: {e}")
-            raise 
+            raise
+    
+    async def save_profile(self, profile: UserProfile) -> UserProfile:
+        """Save a user profile (alias for save method for gamification service compatibility)."""
+        return await self.save(profile) 

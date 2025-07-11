@@ -11,7 +11,7 @@ import {
   Clock,
   Settings as SettingsIcon
 } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/button";
 import { userApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { useTheme } from "next-themes";

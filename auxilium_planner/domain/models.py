@@ -41,11 +41,67 @@ class UserProfile(BaseModel):
     username: str = "default_user"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
-    # Gamification
+    # Core Gamification
     overall_score: int = 0
     current_streak_days: int = 0
     last_streak_check_date: Optional[datetime] = None
     achievements: List[UserAchievement] = Field(default_factory=list)
+    
+    # Enhanced Addictive Gamification
+    level: int = 1
+    experience_points: int = 0
+    experience_to_next_level: int = 100
+    lifetime_score: int = 0
+    
+    # Streak System Enhancement
+    longest_streak: int = 0
+    streak_multiplier: float = 1.0
+    streak_insurance_count: int = 0  # Free "streak saves"
+    last_activity_date: Optional[datetime] = None
+    
+    # Daily/Weekly Systems
+    daily_login_streak: int = 0
+    last_daily_bonus_date: Optional[datetime] = None
+    weekly_challenge_completed: bool = False
+    weekly_challenge_progress: int = 0
+    weekly_challenge_target: int = 5
+    current_week_number: int = 0
+    
+    # Variable Reward System
+    luck_factor: float = 1.0  # Affects bonus chances
+    bonus_multiplier_active: bool = False
+    bonus_multiplier_value: float = 1.0
+    bonus_multiplier_expires: Optional[datetime] = None
+    mystery_boxes_earned: int = 0
+    mystery_boxes_opened: int = 0
+    
+    # Progress Tracking
+    daily_tasks_completed_today: int = 0
+    daily_task_goal: int = 3
+    weekly_tasks_completed: int = 0
+    monthly_tasks_completed: int = 0
+    
+    # Social Competition (Simulated)
+    rank_this_week: int = 1
+    rank_last_week: int = 1
+    seasonal_rank: int = 1
+    competitive_season: int = 1
+    
+    # FOMO Mechanics
+    limited_time_achievements_available: List[str] = Field(default_factory=list)
+    daily_bonus_available: bool = True
+    daily_bonus_value: int = 10
+    consecutive_daily_bonuses: int = 0
+    
+    # Psychological Hooks
+    near_miss_count: int = 0  # Almost completed challenges
+    comeback_bonus_available: bool = False
+    perfectionist_mode: bool = False  # All-or-nothing mentality
+    last_major_achievement: Optional[datetime] = None
+    
+    # Progress Decay (Loss Aversion)
+    days_since_last_activity: int = 0
+    progress_decay_warning: bool = False
     
     # Preferences & Patterns
     preferred_work_hours: Optional[Dict[str, Any]] = None

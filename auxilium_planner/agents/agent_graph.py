@@ -233,7 +233,7 @@ class AgentGraph:
         
         # Check iteration count as safety net
         iteration_count = state.get("iteration_count", 0)
-        if iteration_count >= 10:  # Safety limit
+        if iteration_count >= 100:  # Safety limit
             logger.warning(f"Executor reached iteration limit ({iteration_count}), forcing finalize")
             return "finalize"
         

@@ -97,7 +97,7 @@ class ObjectiveCreate(BaseModel):
     )
     dependencies: List[str] = Field(
         default_factory=list, 
-        description="List of objective IDs (UUIDs) that must be completed before this one can start"
+        description="List of objective IDs (UUIDs) that must be completed before this one can start. Be careful with this field, and always use it when possible."
     )
     points_awarded_for_completion: int = Field(
         default=10, 
