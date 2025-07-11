@@ -2,11 +2,11 @@
   "key_0": {
     "key_id": "key_0",
     "key_suffix": "ozPs",
-    "requests_today": 67,
-    "last_request_time": "2025-07-09T14:51:23.674316",
+    "requests_today": 113,
+    "last_request_time": "2025-07-09T15:51:45.445371",
     "quota_reset_time": null,
     "is_exhausted": false,
-    "total_requests": 906,
+    "total_requests": 952,
     "first_used": "2025-07-04T14:51:24.407696"
   },
   "key_1": {

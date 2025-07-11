@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
-import { ObjectiveCard } from "@/components/objectives/objective-card";
+import ObjectiveCard from "@/components/objectives/objective-card";
 import { ObjectiveTree } from "@/components/objectives/objective-tree";
 import { ObjectiveHierarchyDiagram } from "@/components/objectives/objective-hierarchy-diagram";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { objectivesApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Objective } from "@/types";
-import { LoadingSpinner } from "@/components/ui";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Card } from "@/components/ui/card";
 
 export default function ObjectivesPage() {
@@ -56,6 +56,16 @@ export default function ObjectivesPage() {
       refetch();
     } catch (error) {
       toast.error("Failed to update objective");
+    }
+  };
+
+  const handleComplete = async (id: string) => {
+    try {
+      await objectivesApi.complete(id);
+      toast.success("Objective completed! 🎉");
+      refetch();
+    } catch (error) {
+      toast.error("Failed to complete objective");
     }
   };
 
@@ -175,7 +185,7 @@ export default function ObjectivesPage() {
 
     // Animate progress bar
     tl.to(".progress-bar-fill", {
-      width: `${stats.avgProgress}%`,
+      width: `${Math.min(stats.avgProgress, 100)}%`,
       duration: 0.3,
       ease: "power2.out"
     }, "-=0.1");
@@ -341,6 +351,7 @@ export default function ObjectivesPage() {
           <ObjectiveTree
             objectives={objectives}
             onUpdate={handleUpdate}
+            onComplete={handleComplete}
             onDelete={handleDelete}
             onRefresh={refetch}
           />
@@ -350,6 +361,7 @@ export default function ObjectivesPage() {
             <ObjectiveHierarchyDiagram 
               objectives={objectives}
               onUpdate={handleUpdate}
+              onComplete={handleComplete}
               onDelete={handleDelete}
               onRefresh={refetch}
             />
@@ -364,8 +376,7 @@ export default function ObjectivesPage() {
               >
                 <ObjectiveCard
                   objective={objective}
-                  onUpdate={handleUpdate}
-                  onDelete={handleDelete}
+                  onUpdate={() => refetch()}
                 />
               </div>
             ))}

@@ -100,19 +100,45 @@ export const objectivesApi = {
 
 // User API
 export const userApi = {
-  getProfile: async () => {
-    const { data } = await api.get<UserProfile>("/user/profile");
-    return data;
+  getProfile: async (): Promise<UserProfile> => {
+    const response = await api.get("/user/profile");
+    return response.data;
   },
 
   updatePreferences: async (preferences: any) => {
-    const { data } = await api.put("/user/preferences", preferences);
-    return data;
+    const response = await api.put("/user/preferences", preferences);
+    return response.data;
   },
 
-  getGamificationStats: async () => {
-    const { data } = await api.get<GamificationStats>("/user/gamification/stats");
-    return data;
+  getGamificationStats: async (): Promise<GamificationStats> => {
+    const response = await api.get("/user/gamification/stats");
+    return response.data;
+  },
+
+  // New psychological engagement endpoints
+  getEnhancedGamificationStats: async () => {
+    const response = await api.get("/user/gamification/stats");
+    return response.data;
+  },
+
+  getDailyStatus: async () => {
+    const response = await api.get("/user/gamification/daily-status");
+    return response.data;
+  },
+
+  openMysteryBox: async () => {
+    const response = await api.post("/user/gamification/mystery-box");
+    return response.data;
+  },
+
+  getWeeklyChallenge: async () => {
+    const response = await api.get("/user/gamification/weekly-challenge");
+    return response.data;
+  },
+
+  claimDailyBonus: async () => {
+    const response = await api.post("/user/gamification/daily-bonus");
+    return response.data;
   },
 
   getAchievementDefinitions: async () => {

@@ -133,13 +133,16 @@ class ObjectiveRepository:
                     # Update fields - allow adding new fields and updating existing ones
                     for key, value in updates.items():
                         # Special handling for fields that should allow None values
-                        nullable_fields = {"parent_id", "description", "due_date", "start_date", "start_time", "end_time", "location"}
+                        nullable_fields = {"parent_id", "description", "due_date", "start_date", "start_time", "end_time", "location", "recurring"}
                         
                         if value is not None or key in nullable_fields:
                             # Handle special conversions
                             if key == "estimated_duration" and hasattr(value, 'total_seconds'):
                                 # Convert timedelta to total seconds for storage
                                 obj_data[key] = value.total_seconds()
+                            elif key == "recurring" and hasattr(value, 'dict'):
+                                # Convert RecurringInfo object to dict for JSON serialization
+                                obj_data[key] = value.dict()
                             else:
                                 obj_data[key] = value
                     

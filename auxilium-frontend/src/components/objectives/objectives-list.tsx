@@ -12,7 +12,7 @@ import {
   AlertCircle,
   Repeat
 } from "lucide-react";
-import { Objective } from "@/types";
+import { Objective, ObjectiveStatus } from "@/types";
 import { cn, formatDate, getStatusBadgeColor, getEnergyLevelColor, formatObjectiveType } from "@/lib/utils";
 
 interface ObjectivesListProps {
@@ -109,7 +109,7 @@ export function ObjectivesList({ objectives }: ObjectivesListProps) {
                       <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${objective.completion_percentage}%` }}
+                          animate={{ width: `${Math.min(objective.completion_percentage || 0, 100)}%` }}
                           className="h-full bg-primary"
                         />
                       </div>
@@ -122,7 +122,7 @@ export function ObjectivesList({ objectives }: ObjectivesListProps) {
             
             <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button className="p-2 hover:bg-muted rounded-md transition-colors">
-                {objective.status === "COMPLETED" ? (
+                {objective.status === ObjectiveStatus.COMPLETED ? (
                   <CheckCircle className="w-4 h-4 text-green-500" />
                 ) : (
                   <AlertCircle className="w-4 h-4 text-muted-foreground" />

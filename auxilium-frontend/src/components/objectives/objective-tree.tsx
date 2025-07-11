@@ -17,7 +17,7 @@ import {
 import { Objective, ObjectiveStatus, ObjectiveType, EnergyLevel } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ObjectiveModal } from "@/components/modals";
-import { ObjectiveCard } from "@/components/objectives/objective-card";
+import ObjectiveCard from "@/components/objectives/objective-card";
 import { cn } from "@/lib/utils";
 import { objectivesApi } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -25,6 +25,7 @@ import toast from "react-hot-toast";
 interface ObjectiveTreeProps {
   objectives: Objective[];
   onUpdate: (id: string, updates: any) => void;
+  onComplete?: (id: string) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
 }
@@ -34,12 +35,13 @@ interface TreeNodeProps {
   childObjectives: Objective[];
   level: number;
   onUpdate: (id: string, updates: any) => void;
+  onComplete?: (id: string) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
   allObjectives: Objective[];
 }
 
-function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRefresh, allObjectives }: TreeNodeProps) {
+function TreeNode({ objective, childObjectives, level, onUpdate, onComplete, onDelete, onRefresh, allObjectives }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(level < 2); // Only expand first two levels by default
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -47,7 +49,8 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
   const typeIcons = {
     [ObjectiveType.MAIN_OBJECTIVE]: <AlertCircle className="w-4 h-4" />,
     [ObjectiveType.SUB_OBJECTIVE]: <Target className="w-4 h-4" />,
-    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />
+    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />,
+    [ObjectiveType.HABIT]: <Clock className="w-4 h-4" />
   };
 
   const energyIcons = {
@@ -111,15 +114,21 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
             <div className="absolute left-[-24px] top-8 w-6 h-px bg-border" />
           )}
 
-          <div
-            className={cn(
-              "bg-card border rounded-xl p-4 mb-3 transition-all cursor-pointer",
-              objective.status === ObjectiveStatus.COMPLETED 
-                ? "border-green-500/50 bg-green-50/5" 
-                : "border-border hover:border-primary/50"
-            )}
-            onClick={() => setShowDetails(!showDetails)}
-          >
+                      <div
+              className={cn(
+                "bg-card border rounded-xl p-4 mb-3 transition-all cursor-pointer relative",
+                objective.status === ObjectiveStatus.COMPLETED 
+                  ? "border-green-500 bg-green-50 dark:bg-green-900/20 shadow-lg" 
+                  : "border-border hover:border-primary/50"
+              )}
+              onClick={() => setShowDetails(!showDetails)}
+            >
+              {/* Completion Badge */}
+              {objective.status === ObjectiveStatus.COMPLETED && (
+                <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-3 py-1 rounded-full font-medium shadow-md">
+                  ✓ Completed
+                </div>
+              )}
             <div className="flex items-start justify-between">
               <div className="flex items-start space-x-3 flex-1">
                 {/* Expand/Collapse Button */}
@@ -162,7 +171,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
-                            animate={{ width: `${childProgress}%` }}
+                            animate={{ width: `${Math.min(childProgress, 100)}%` }}
                             transition={{ duration: 0.3 }}
                             className="h-full bg-primary"
                           />
@@ -212,8 +221,7 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
                 >
                   <ObjectiveCard
                     objective={objective}
-                    onUpdate={onUpdate}
-                    onDelete={onDelete}
+                    onUpdate={() => onRefresh()}
                   />
                 </motion.div>
               )}
@@ -230,13 +238,26 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {childObjectives.map((child, index) => (
+              {childObjectives
+                .sort((a, b) => {
+                  // Sort child objectives chronologically too
+                  const getDate = (obj: Objective) => {
+                    if (obj.start_date) return new Date(obj.start_date);
+                    if (obj.due_date) return new Date(obj.due_date);
+                    return new Date(obj.created_at);
+                  };
+                  const dateA = getDate(a);
+                  const dateB = getDate(b);
+                  return dateA.getTime() - dateB.getTime();
+                })
+                .map((child, index) => (
                 <TreeNode
                   key={child.id}
                   objective={child}
                   childObjectives={allObjectives.filter((obj: Objective) => obj.parent_id === child.id)}
                   level={level + 1}
                   onUpdate={onUpdate}
+                  onComplete={onComplete}
                   onDelete={onDelete}
                   onRefresh={onRefresh}
                   allObjectives={allObjectives}
@@ -262,9 +283,28 @@ function TreeNode({ objective, childObjectives, level, onUpdate, onDelete, onRef
   );
 }
 
-export function ObjectiveTree({ objectives, onUpdate, onDelete, onRefresh }: ObjectiveTreeProps) {
-  // Get root objectives (no parent)
-  const rootObjectives = objectives.filter(obj => !obj.parent_id);
+export function ObjectiveTree({ objectives, onUpdate, onComplete, onDelete, onRefresh }: ObjectiveTreeProps) {
+  // Helper function to sort objectives chronologically
+  const sortObjectivesChronologically = (objs: Objective[]) => {
+    return [...objs].sort((a, b) => {
+      // Get the primary date for sorting (start_date > due_date > created_at)
+      const getDate = (obj: Objective) => {
+        if (obj.start_date) return new Date(obj.start_date);
+        if (obj.due_date) return new Date(obj.due_date);
+        return new Date(obj.created_at);
+      };
+
+      const dateA = getDate(a);
+      const dateB = getDate(b);
+      
+      return dateA.getTime() - dateB.getTime();
+    });
+  };
+
+  // Get root objectives (no parent) and sort chronologically
+  const rootObjectives = sortObjectivesChronologically(
+    objectives.filter(obj => !obj.parent_id)
+  );
 
   // Helper to get all objectives (for passing to TreeNode)
   const allObjectives = objectives;
@@ -289,6 +329,7 @@ export function ObjectiveTree({ objectives, onUpdate, onDelete, onRefresh }: Obj
           childObjectives={allObjectives.filter(obj => obj.parent_id === root.id)}
           level={0}
           onUpdate={onUpdate}
+          onComplete={onComplete}
           onDelete={onDelete}
           onRefresh={onRefresh}
           allObjectives={allObjectives}

@@ -19,13 +19,14 @@ import {
 } from "lucide-react";
 import { objectivesApi } from "@/lib/api";
 import { ObjectiveModal } from "@/components/modals";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 
 interface ObjectiveHierarchyDiagramProps {
   objectives: Objective[];
   onUpdate?: (id: string, updates: any) => void;
+  onComplete?: (id: string) => void;
   onDelete?: (id: string) => void;
   onRefresh?: () => void;
 }
@@ -78,21 +79,23 @@ export function ObjectiveHierarchyDiagram({
   const typeIcons = {
     [ObjectiveType.MAIN_OBJECTIVE]: <AlertCircle className="w-4 h-4" />,
     [ObjectiveType.SUB_OBJECTIVE]: <Target className="w-4 h-4" />,
-    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />
+    [ObjectiveType.TASK]: <CheckCircle className="w-4 h-4" />,
+    [ObjectiveType.HABIT]: <Clock className="w-4 h-4" />
   };
 
   const typeStyles = {
-    [ObjectiveType.MAIN_OBJECTIVE]: "from-purple-600/30 to-purple-700/20 border-purple-600/60",
-    [ObjectiveType.SUB_OBJECTIVE]: "from-blue-600/30 to-blue-700/20 border-blue-600/60",
-    [ObjectiveType.TASK]: "from-green-600/30 to-green-700/20 border-green-600/60"
+    [ObjectiveType.MAIN_OBJECTIVE]: "from-purple-500/20 to-purple-600/10 border-purple-500/40 dark:from-purple-400/20 dark:to-purple-500/10 dark:border-purple-400/50",
+    [ObjectiveType.SUB_OBJECTIVE]: "from-blue-500/20 to-blue-600/10 border-blue-500/40 dark:from-blue-400/20 dark:to-blue-500/10 dark:border-blue-400/50",
+    [ObjectiveType.TASK]: "from-green-500/20 to-green-600/10 border-green-500/40 dark:from-green-400/20 dark:to-green-500/10 dark:border-green-400/50",
+    [ObjectiveType.HABIT]: "from-orange-500/20 to-orange-600/10 border-orange-500/40 dark:from-orange-400/20 dark:to-orange-500/10 dark:border-orange-400/50"
   };
 
   const statusStyles = {
-    [ObjectiveStatus.COMPLETED]: "border-green-600/80 bg-green-100/80",
-    [ObjectiveStatus.IN_PROGRESS]: "border-blue-600/80 bg-blue-100/80",
-    [ObjectiveStatus.BLOCKED]: "border-red-600/80 bg-red-100/80",
-    [ObjectiveStatus.NOT_STARTED]: "border-gray-500/80 bg-gray-100/80",
-    [ObjectiveStatus.CANCELLED]: "border-gray-400/80 bg-gray-200/80"
+    [ObjectiveStatus.COMPLETED]: "border-green-500/60 bg-green-50/60 dark:border-green-400/60 dark:bg-green-900/20",
+    [ObjectiveStatus.IN_PROGRESS]: "border-blue-500/60 bg-blue-50/60 dark:border-blue-400/60 dark:bg-blue-900/20",
+    [ObjectiveStatus.BLOCKED]: "border-red-500/60 bg-red-50/60 dark:border-red-400/60 dark:bg-red-900/20",
+    [ObjectiveStatus.NOT_STARTED]: "border-gray-400/60 bg-gray-50/60 dark:border-gray-500/60 dark:bg-gray-800/20",
+    [ObjectiveStatus.CANCELLED]: "border-gray-300/60 bg-gray-100/60 dark:border-gray-600/60 dark:bg-gray-700/20"
   };
 
   // Handle drag operations
@@ -427,10 +430,11 @@ export function ObjectiveHierarchyDiagram({
                   <div className="flex items-center space-x-3">
                     <span className={cn(
                       "text-xs px-2 py-0.5 rounded-full font-medium",
-                      node.status === ObjectiveStatus.COMPLETED ? "bg-green-500/20 text-green-700" :
-                      node.status === ObjectiveStatus.IN_PROGRESS ? "bg-blue-500/20 text-blue-700" :
-                      node.status === ObjectiveStatus.BLOCKED ? "bg-red-500/20 text-red-700" :
-                      "bg-gray-500/20 text-gray-700"
+                      node.status === ObjectiveStatus.COMPLETED ? "bg-green-500/20 text-green-700 dark:bg-green-400/20 dark:text-green-300" :
+                      node.status === ObjectiveStatus.IN_PROGRESS ? "bg-blue-500/20 text-blue-700 dark:bg-blue-400/20 dark:text-blue-300" :
+                      node.status === ObjectiveStatus.BLOCKED ? "bg-red-500/20 text-red-700 dark:bg-red-400/20 dark:text-red-300" :
+                      node.status === ObjectiveStatus.NOT_STARTED ? "bg-gray-500/20 text-gray-700 dark:bg-gray-400/20 dark:text-gray-300" :
+                      "bg-gray-400/20 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400"
                     )}>
                       {node.status.replace("_", " ")}
                     </span>
@@ -456,7 +460,7 @@ export function ObjectiveHierarchyDiagram({
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-primary transition-all duration-150"
-                        style={{ width: `${node.completion_percentage}%` }}
+                        style={{ width: `${Math.min(node.completion_percentage || 0, 100)}%` }}
                       />
                     </div>
                   </div>
