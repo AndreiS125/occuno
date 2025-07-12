@@ -91,14 +91,14 @@ interface StreamingEvent {
 
 interface ThinkingEvent {
   id: string;
-  agent: 'planning' | 'executor';
+  agent: 'planning' | 'executor' | 'single';
   content: string;
   timestamp: string;
 }
 
 interface ToolCallEvent {
   id: string;
-  agent: 'planning' | 'executor';
+  agent: 'planning' | 'executor' | 'single';
   tool_name: string;
   tool_args: Record<string, any>;
   timestamp: string;
@@ -106,7 +106,7 @@ interface ToolCallEvent {
 
 interface ToolResultEvent {
   id: string;
-  agent: 'planning' | 'executor';
+  agent: 'planning' | 'executor' | 'single';
   tool_name: string;
   tool_call_id: string;
   result: string;
@@ -115,7 +115,7 @@ interface ToolResultEvent {
 
 interface AgentResponseEvent {
   id: string;
-  agent: 'planning' | 'executor';
+  agent: 'planning' | 'executor' | 'single';
   content: string;
   timestamp: string;
 }
@@ -230,6 +230,7 @@ const ChatPage: React.FC = () => {
   const [conversationThreads, setConversationThreads] = useState<ConversationThread[]>([]);
   const [showExecutionDetails, setShowExecutionDetails] = useState<Record<string, boolean>>({});
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [selectedAgent, setSelectedAgent] = useState<'multi' | 'single'>('multi');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Load conversation history from backend
@@ -522,7 +523,12 @@ const ChatPage: React.FC = () => {
     setCurrentPhase('Initializing...');
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/agent/chat/stream', {
+      // Choose endpoint based on selected agent
+      const endpoint = selectedAgent === 'single' 
+        ? 'http://localhost:8000/api/v1/agent/chat/single/stream'
+        : 'http://localhost:8000/api/v1/agent/chat/stream';
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -593,7 +599,7 @@ const ChatPage: React.FC = () => {
     } finally {
       setIsStreaming(false);
     }
-  }, [inputMessage, isStreaming, currentThreadId]);
+  }, [inputMessage, isStreaming, currentThreadId, selectedAgent]);
 
   const updateExecutionWithEvent = useCallback(async (event: StreamingEvent) => {
     setExecutions(prev => prev.map(execution => {
@@ -615,7 +621,12 @@ const ChatPage: React.FC = () => {
           break;
 
         case 'node_start':
-          updated.currentPhase = `${event.agent} Agent - ${event.node}`;
+          // Handle single agent node names
+          if (event.agent === 'single' || selectedAgent === 'single') {
+            updated.currentPhase = `Single Agent - ${event.node}`;
+          } else {
+            updated.currentPhase = `${event.agent} Agent - ${event.node}`;
+          }
           break;
 
         case 'thinking':
@@ -625,7 +636,7 @@ const ChatPage: React.FC = () => {
             if (!existingThinking) {
               updated.thinkingContent.push({
                 id: event.thinking_id,
-                agent: event.agent as 'planning' | 'executor',
+                agent: event.agent as 'planning' | 'executor' | 'single',
                 content: event.content,
                 timestamp: event.timestamp
               });
@@ -641,7 +652,7 @@ const ChatPage: React.FC = () => {
             if (!existingToolCall) {
               updated.toolCalls.push({
                 id: event.tool_call_id,
-                agent: event.agent as 'planning' | 'executor',
+                agent: event.agent as 'planning' | 'executor' | 'single',
                 tool_name: event.tool_name,
                 tool_args: event.tool_args || {},
                 timestamp: event.timestamp
@@ -658,7 +669,7 @@ const ChatPage: React.FC = () => {
             if (!existingResult) {
               updated.toolResults.push({
                 id: event.tool_result_id || Date.now().toString(),
-                agent: event.agent as 'planning' | 'executor',
+                agent: event.agent as 'planning' | 'executor' | 'single',
                 tool_name: event.tool_name || 'unknown',
                 tool_call_id: event.tool_call_id,
                 result: event.result,
@@ -750,7 +761,7 @@ const ChatPage: React.FC = () => {
 
       return updated;
     }));
-  }, []);
+  }, [selectedAgent]);
 
   const toggleExecutionDetails = (executionId: string) => {
     setShowExecutionDetails(prev => ({
@@ -1177,81 +1188,66 @@ const ChatPage: React.FC = () => {
         );
   };
 
+  const getAgentDisplayName = (agent: 'planning' | 'executor' | 'single') => {
+    switch (agent) {
+      case 'planning':
+        return 'Planning';
+      case 'executor':
+        return 'Execution';
+      case 'single':
+        return 'Single Agent';
+      default:
+        return agent;
+    }
+  };
+
   const renderExecutionDetails = (execution: ExecutionData) => {
     if (!showExecutionDetails[execution.id]) return null;
 
-    const toolCalls = execution.toolCalls || [];
-    const toolResults = execution.toolResults || [];
-    const thinkingContent = execution.thinkingContent || [];
-    
-    if (toolCalls.length === 0 && thinkingContent.length === 0) return null;
-    
-    // Create a combined array of all events with proper chronological ordering
-    const allEvents: Array<{
-      type: 'thinking' | 'tool_call';
-      timestamp: string;
-      data: ThinkingEvent | ToolCallEvent;
-    }> = [];
+    const allEvents: any[] = [];
     
     // Add thinking events
-    thinkingContent.forEach(thinking => {
+    execution.thinkingContent.forEach(thinking => {
       allEvents.push({
         type: 'thinking',
         timestamp: thinking.timestamp,
-        data: thinking
+        data: thinking,
+        agent: thinking.agent
       });
     });
     
     // Add tool call events
-    toolCalls.forEach(toolCall => {
+    execution.toolCalls.forEach(toolCall => {
       allEvents.push({
         type: 'tool_call',
         timestamp: toolCall.timestamp,
-        data: toolCall
+        data: toolCall,
+        agent: toolCall.agent
       });
     });
     
-    // Sort all events chronologically
+    // Sort by timestamp
     allEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     
     return (
-      <div className="space-y-1.5 mb-3">
-        {/* Execution summary */}
-        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pb-2">
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {execution.isComplete ? 'Completed' : 'Processing...'}
-          </span>
-          <span className="flex items-center gap-1">
-            <Activity className="w-3 h-3" />
-            <span className="text-green-600 dark:text-green-400">{execution.inputTokens.toLocaleString()}</span>
-            <span className="text-gray-400 dark:text-gray-500">+</span>
-            <span className="text-blue-600 dark:text-blue-400">{execution.outputTokens.toLocaleString()}</span>
-            <span className="text-gray-500 dark:text-gray-400">= {execution.totalTokens.toLocaleString()} tokens</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <DollarSign className="w-3 h-3" />
-            {formatCost(execution.totalCost)}
-          </span>
-        </div>
-
-        {/* Show all events in chronological order */}
-        {allEvents.map((event, idx) => {
-          const key = `${event.type}-${event.data.id}-${idx}`;
-    const isExpanded = expandedItems[key];
-            
-            if (event.type === 'thinking') {
+      <div className="space-y-2">
+        {allEvents.map((event, index) => {
+          const key = `${event.type}-${index}`;
+          const isExpanded = expandedItems[key];
+          
+          if (event.type === 'thinking') {
             const thinking = event.data as ThinkingEvent;
             
-              if (!isExpanded) {
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleExpanded(key)}
-                    className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1"
-                  >
-                    <Brain className="w-3 h-3" />
-                  <span>{thinking.agent === 'planning' ? 'Planning' : 'Execution'} thoughts...</span>
+            if (!isExpanded) {
+              // Collapsed thinking view
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleExpanded(key)}
+                  className="w-full rounded-md bg-purple-50/50 dark:bg-purple-900/30 border border-purple-100 dark:border-purple-700 px-2.5 py-1.5 flex items-center gap-2 text-left hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  <Brain className="w-3 h-3" />
+                  <span>{getAgentDisplayName(thinking.agent)} thoughts...</span>
                     <ChevronRight className="w-3 h-3" />
                   </button>
                 );
@@ -1265,7 +1261,7 @@ const ChatPage: React.FC = () => {
                   >
                     <Brain className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                     <span className="text-xs font-medium flex-1">
-                    {thinking.agent === 'planning' ? 'Planning' : 'Execution'} Thoughts
+                      {getAgentDisplayName(thinking.agent)} Thoughts
                     </span>
                     <ChevronUp className="w-3 h-3 text-gray-400" />
                   </button>
@@ -1284,7 +1280,7 @@ const ChatPage: React.FC = () => {
             const toolCall = event.data as ToolCallEvent;
             const formatted = formatToolCall(toolCall);
               const Icon = formatted.icon;
-            const relatedResult = toolResults.find(r => r.tool_call_id === toolCall.id);
+            const relatedResult = execution.toolResults.find(r => r.tool_call_id === toolCall.id);
 
     return (
                 <div 
@@ -1414,7 +1410,40 @@ const ChatPage: React.FC = () => {
                   <History className="w-4 h-4 mr-2" />
                   {showHistory ? 'Hide History' : 'Show History'}
                 </Button>
-                <CardTitle className="text-lg font-semibold dark:text-white">Auxilium AI Agent</CardTitle>
+                <CardTitle className="text-lg font-semibold dark:text-white">
+                  Auxilium AI Agent
+                </CardTitle>
+                
+                {/* Agent Selection Toggle */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Agent:</span>
+                  <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                    <button
+                      onClick={() => setSelectedAgent('multi')}
+                      className={cn(
+                        "px-3 py-1 text-xs font-medium rounded-md transition-all duration-200",
+                        selectedAgent === 'multi'
+                          ? "bg-blue-500 text-white shadow-sm"
+                          : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                      )}
+                      disabled={isStreaming}
+                    >
+                      Multi-Agent
+                    </button>
+                    <button
+                      onClick={() => setSelectedAgent('single')}
+                      className={cn(
+                        "px-3 py-1 text-xs font-medium rounded-md transition-all duration-200",
+                        selectedAgent === 'single'
+                          ? "bg-green-500 text-white shadow-sm"
+                          : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                      )}
+                      disabled={isStreaming}
+                    >
+                      Single Agent
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {currentThreadId && (
@@ -1423,8 +1452,13 @@ const ChatPage: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <Activity className="w-4 h-4 text-green-500" />
                   <span className="text-gray-600 dark:text-gray-300">{currentPhase}</span>
-              </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline" className="text-xs">
+                    {selectedAgent === 'multi' ? 'Planning + Execution' : 'Streamlined'}
+                  </Badge>
             </div>
+          </div>
           </CardHeader>
           </Card>
 
@@ -1435,7 +1469,20 @@ const ChatPage: React.FC = () => {
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <Sparkles className="w-16 h-16 text-blue-500 mb-4" />
                   <h3 className="text-xl font-semibold mb-2 dark:text-white">Start a conversation with Auxilium</h3>
-                  <p className="text-gray-600 dark:text-gray-400">I can help you manage objectives, track progress, and organize your tasks.</p>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    I can help you manage objectives, track progress, and organize your tasks.
+                  </p>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 max-w-md">
+                    <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-2">
+                      {selectedAgent === 'multi' ? '🧠 Multi-Agent System' : '⚡ Single Agent System'}
+                    </p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      {selectedAgent === 'multi' 
+                        ? 'Comprehensive planning and execution with detailed analysis'
+                        : 'Streamlined, efficient responses with faster processing'
+                      }
+                    </p>
+                  </div>
                   </div>
               ) : (
                 <div className="space-y-6">
@@ -1457,11 +1504,25 @@ const ChatPage: React.FC = () => {
                         <div className="max-w-[85%] bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl rounded-bl-md shadow-sm">
                           {/* AI Header */}
                           <div className="flex items-center gap-3 px-4 py-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 rounded-t-2xl">
-                            <div className="w-8 h-8 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center flex-shrink-0">
-                              <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400" />
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                              selectedAgent === 'multi' 
+                                ? "bg-blue-100 dark:bg-blue-900/40"
+                                : "bg-green-100 dark:bg-green-900/40"
+                            )}>
+                              {selectedAgent === 'multi' ? (
+                                <Brain className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                              ) : (
+                                <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />
+                              )}
                           </div>
                             <div className="flex-1">
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">Auxilium</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">Auxilium</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {selectedAgent === 'multi' ? 'Multi-Agent' : 'Single Agent'}
+                                </Badge>
+                              </div>
                               <div className="flex items-center gap-4 mt-1">
                                 {execution.isComplete ? (
                                   <>
@@ -1524,11 +1585,11 @@ const ChatPage: React.FC = () => {
 
             {/* Input Area */}
             <div className="border-t dark:border-gray-700 p-4">
-            <div className="flex gap-2">
+              <div className="flex gap-2">
                 <Input
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask me anything..."
+                  placeholder={`Ask me anything... (${selectedAgent === 'multi' ? 'Multi-Agent' : 'Single Agent'} mode)`}
                   className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                   onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                 disabled={isStreaming}
