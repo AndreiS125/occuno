@@ -14,14 +14,16 @@ import asyncio
 from datetime import datetime
 
 from agents.agent_graph import AgentGraph
+from agents.single_agent_graph import SingleAgentGraph, StreamingSingleAgentGraph
 from agents.memory_system import MemorySystem
 from core.logging_config import get_logger
 
 logger = get_logger("agent_api")
 router = APIRouter(tags=["agent"])
 
-# Global agent instance
+# Global agent instances
 agent_graph: Optional[AgentGraph] = None
+single_agent_graph: Optional[SingleAgentGraph] = None
 
 
 class ChatRequest(BaseModel):
@@ -546,17 +548,32 @@ class StreamingAgentGraph(AgentGraph):
 
 def get_agent_graph() -> AgentGraph:
     """
-    Get or initialize the agent graph.
+    Get or initialize the multi-agent graph.
     
     Returns:
         AgentGraph instance
     """
     global agent_graph
     if agent_graph is None:
-        logger.info("🤖 Initializing Agent Graph...")
+        logger.info("🤖 Initializing Multi-Agent Graph...")
         agent_graph = AgentGraph()
-        logger.info("✅ Agent Graph initialized successfully")
+        logger.info("✅ Multi-Agent Graph initialized successfully")
     return agent_graph
+
+
+def get_single_agent_graph() -> SingleAgentGraph:
+    """
+    Get or initialize the single agent graph.
+    
+    Returns:
+        SingleAgentGraph instance
+    """
+    global single_agent_graph
+    if single_agent_graph is None:
+        logger.info("⚡ Initializing Single Agent Graph...")
+        single_agent_graph = SingleAgentGraph()
+        logger.info("✅ Single Agent Graph initialized successfully")
+    return single_agent_graph
 
 
 def get_streaming_agent_graph() -> StreamingAgentGraph:
@@ -568,6 +585,17 @@ def get_streaming_agent_graph() -> StreamingAgentGraph:
     """
     # Always create a new instance for streaming to avoid conflicts
     return StreamingAgentGraph()
+
+
+def get_streaming_single_agent_graph() -> StreamingSingleAgentGraph:
+    """
+    Get or initialize the streaming single agent graph.
+    
+    Returns:
+        StreamingSingleAgentGraph instance
+    """
+    # Always create a new instance for streaming to avoid conflicts
+    return StreamingSingleAgentGraph()
 
 
 @router.post("/chat/stream")
@@ -686,16 +714,132 @@ async def chat_with_agent_streaming(request: StreamingChatRequest) -> StreamingR
     )
 
 
+@router.post("/chat/single/stream")
+async def chat_with_single_agent_streaming(request: StreamingChatRequest) -> StreamingResponse:
+    """
+    Chat with the AI single agent system using Server-Sent Events for real-time streaming.
+    
+    This endpoint provides detailed, real-time updates of the single agent's execution process,
+    including thoughts, tool calls, and results.
+    """
+    async def generate_events():
+        agent = None
+        try:
+            # Get streaming single agent
+            agent = get_streaming_single_agent_graph()
+            logger.info(f"⚡ Starting single agent streaming for message: {request.message[:100]}...")
+            
+            # Process streaming in background
+            async def stream_processing():
+                try:
+                    await agent.process_user_input_streaming(
+                        user_input=request.message,
+                        thread_id=request.thread_id
+                    )
+                    logger.info("🏁 Single agent streaming processing completed")
+                except Exception as e:
+                    logger.error(f"❌ Error in single agent streaming processing: {e}")
+                    await agent.emit_event({
+                        'type': 'execution_error',
+                        'error': str(e)
+                    })
+            
+            # Start processing
+            processing_task = asyncio.create_task(stream_processing())
+            
+            # Track heartbeat timing
+            last_heartbeat = asyncio.get_event_loop().time()
+            heartbeat_interval = 30  # Send heartbeat every 30 seconds if no events
+            
+            # Stream events as they come
+            while True:
+                try:
+                    # Use longer timeout for event waiting to avoid unnecessary heartbeats
+                    event = await asyncio.wait_for(agent.event_queue.get(), timeout=5.0)
+                    
+                    # Log event for debugging
+                    logger.info(f"📡 Single Agent SSE Event: {event.get('type')} - {event.get('agent', 'system')}")
+                    
+                    # Format as SSE and yield immediately
+                    event_data = json.dumps(event)
+                    yield f"data: {event_data}\n\n"
+                    
+                    # Update heartbeat timing
+                    last_heartbeat = asyncio.get_event_loop().time()
+                    
+                    # Check if execution is complete
+                    if event.get('type') in ['execution_complete', 'execution_error']:
+                        logger.info(f"🏁 Single agent streaming complete: {event.get('type')}")
+                        break
+                        
+                except asyncio.TimeoutError:
+                    # Check if we need to send a heartbeat
+                    current_time = asyncio.get_event_loop().time()
+                    if current_time - last_heartbeat >= heartbeat_interval:
+                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+                        last_heartbeat = current_time
+                    
+                    # Check if processing is done
+                    if processing_task.done():
+                        logger.info("🏁 Single agent processing task completed, ending stream")
+                        break
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error in single agent event generation: {e}")
+                    error_event = {
+                        'type': 'error',
+                        'message': str(e),
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    yield f"data: {json.dumps(error_event)}\n\n"
+                    break
+            
+            # Ensure processing task is complete
+            if not processing_task.done():
+                try:
+                    await processing_task
+                except Exception as e:
+                    logger.error(f"❌ Error in single agent processing task: {e}")
+                    error_event = {
+                        'type': 'error',
+                        'message': str(e),
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    yield f"data: {json.dumps(error_event)}\n\n"
+        
+        except Exception as e:
+            logger.error(f"Critical error in single agent streaming: {e}")
+            error_event = {
+                'type': 'critical_error',
+                'message': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+    
+    return StreamingResponse(
+        generate_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_agent(request: ChatRequest) -> ChatResponse:
     """
-    Chat with the AI agent system.
+    Chat with the AI multi-agent system (Planning + Executor).
     
     The agent will analyze your request, gather relevant information,
     and take appropriate actions on your behalf.
     """
     try:
-        logger.info(f"🤖 New chat request: {request.message[:100]}...")
+        logger.info(f"🤖 New multi-agent chat request: {request.message[:100]}...")
         
         # Get agent graph
         agent = get_agent_graph()
@@ -709,7 +853,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
         # Get or create thread ID
         thread_id = request.thread_id or str(uuid.uuid4())
         
-        logger.info(f"✅ Chat request processed successfully for thread {thread_id}")
+        logger.info(f"✅ Multi-agent chat request processed successfully for thread {thread_id}")
         
         return ChatResponse(
             response=response,
@@ -719,7 +863,54 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
         )
     
     except Exception as e:
-        logger.error(f"❌ Error processing chat request: {e}")
+        logger.error(f"❌ Error processing multi-agent chat request: {e}")
+        logger.error(f"Full error traceback:", exc_info=True)
+        
+        # Return error response
+        thread_id = request.thread_id or str(uuid.uuid4())
+        
+        return ChatResponse(
+            response=f"I apologize, but I encountered an error while processing your request: {str(e)}",
+            thread_id=thread_id,
+            agent_used="Error Handler",
+            success=False
+        )
+
+
+@router.post("/chat/single", response_model=ChatResponse)
+async def chat_with_single_agent(request: ChatRequest) -> ChatResponse:
+    """
+    Chat with the AI single agent system (faster, more efficient).
+    
+    The agent will analyze your request and take appropriate actions
+    in a single streamlined workflow.
+    """
+    try:
+        logger.info(f"⚡ New single agent chat request: {request.message[:100]}...")
+        
+        # Get single agent graph
+        agent = get_single_agent_graph()
+        
+        # Process the user input
+        response = await agent.process_user_input(
+            user_input=request.message,
+            thread_id=request.thread_id
+        )
+        
+        # Get or create thread ID
+        thread_id = request.thread_id or str(uuid.uuid4())
+        
+        logger.info(f"✅ Single agent chat request processed successfully for thread {thread_id}")
+        
+        return ChatResponse(
+            response=response,
+            thread_id=thread_id,
+            agent_used="Single Agent",
+            success=True
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Error processing single agent chat request: {e}")
         logger.error(f"Full error traceback:", exc_info=True)
         
         # Return error response
@@ -933,40 +1124,64 @@ async def list_conversation_threads() -> Dict[str, Any]:
 @router.get("/status")
 async def get_agent_status() -> Dict[str, Any]:
     """
-    Get the current status of the agent system.
+    Get the current status of both agent systems.
     """
     try:
-        # Check if agent is initialized
-        agent_initialized = agent_graph is not None
+        # Check if agents are initialized
+        multi_agent_initialized = agent_graph is not None
+        single_agent_initialized = single_agent_graph is not None
         
         status_info = {
-            "agent_initialized": agent_initialized,
+            "multi_agent_initialized": multi_agent_initialized,
+            "single_agent_initialized": single_agent_initialized,
             "system_healthy": True,
             "available_models": {
-                "planning_model": "gemini-2.0-flash-exp",
-                "executor_model": "gemini-2.0-flash-thinking-exp-1219"
+                "multi_agent_planning_model": "gemini-2.5-flash",
+                "multi_agent_executor_model": "gemini-2.5-flash", 
+                "single_agent_model": "gemini-2.5-flash"
+            },
+            "agent_systems": {
+                "multi_agent": {
+                    "description": "Planning + Executor agents for complex workflows",
+                    "initialized": multi_agent_initialized,
+                    "endpoints": {
+                        "chat": "/chat",
+                        "stream": "/chat/stream"
+                    }
+                },
+                "single_agent": {
+                    "description": "Single agent for efficient, streamlined workflows",
+                    "initialized": single_agent_initialized,
+                    "endpoints": {
+                        "chat": "/chat/single",
+                        "stream": "/chat/single/stream"
+                    }
+                }
             },
             "features": {
                 "planning_agent": True,
                 "executor_agent": True,
+                "single_agent": True,
                 "memory_system": True,
                 "conversation_threading": True,
                 "objective_management": True,
-                "gamification": True
+                "gamification": True,
+                "streaming_support": True
             }
         }
         
-        if agent_initialized:
-            status_info["message"] = "Agent system is ready and operational"
+        if multi_agent_initialized or single_agent_initialized:
+            status_info["message"] = "Agent systems are ready and operational"
         else:
-            status_info["message"] = "Agent system will be initialized on first request"
+            status_info["message"] = "Agent systems will be initialized on first request"
         
         return status_info
     
     except Exception as e:
         logger.error(f"❌ Error getting agent status: {e}")
         return {
-            "agent_initialized": False,
+            "multi_agent_initialized": False,
+            "single_agent_initialized": False,
             "system_healthy": False,
             "error": str(e),
             "message": "Agent system encountered an error"
@@ -974,24 +1189,41 @@ async def get_agent_status() -> Dict[str, Any]:
 
 
 @router.post("/initialize")
-async def initialize_agent_system(background_tasks: BackgroundTasks) -> Dict[str, Any]:
+async def initialize_agent_systems(background_tasks: BackgroundTasks) -> Dict[str, Any]:
     """
-    Manually initialize the agent system.
+    Manually initialize both agent systems.
     """
     try:
-        # Initialize in background if not already done
+        initialization_tasks = []
+        
+        # Initialize multi-agent system if not already done
         if agent_graph is None:
             background_tasks.add_task(get_agent_graph)
+            initialization_tasks.append("multi_agent")
             
-        return {
-            "success": True,
-            "message": "Agent system initialization started",
-            "status": "initializing"
-        }
+        # Initialize single agent system if not already done
+        if single_agent_graph is None:
+            background_tasks.add_task(get_single_agent_graph)
+            initialization_tasks.append("single_agent")
+            
+        if initialization_tasks:
+            return {
+                "success": True,
+                "message": f"Agent systems initialization started: {', '.join(initialization_tasks)}",
+                "status": "initializing",
+                "systems": initialization_tasks
+            }
+        else:
+            return {
+                "success": True,
+                "message": "All agent systems are already initialized",
+                "status": "ready",
+                "systems": []
+            }
     
     except Exception as e:
-        logger.error(f"❌ Error initializing agent system: {e}")
+        logger.error(f"❌ Error initializing agent systems: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to initialize agent system: {str(e)}"
+            detail=f"Failed to initialize agent systems: {str(e)}"
         ) 

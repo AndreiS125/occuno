@@ -191,7 +191,7 @@ async def retrieve_objective_by_name(name: str) -> str:
             if search_term in obj.title.lower():
                 score = 1.0 if obj.title.lower() == search_term else 0.8
                 matches.append((score, obj))
-            elif search_term in obj.description.lower() if obj.description else False:
+            elif obj.description and search_term in obj.description.lower():
                 matches.append((0.6, obj))
         
         # Sort by relevance score and take top 3
