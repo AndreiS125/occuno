@@ -27,6 +27,7 @@ import { objectivesApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import RewardAnimation from "@/components/ui/reward-animations";
+import CouponRewardAnimation from "@/components/ui/reward-animations";
 import { ObjectiveModal } from "@/components/modals";
 
 interface ObjectiveCardProps {
@@ -39,8 +40,9 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
   const [isUpdating, setIsUpdating] = useState(false);
   const [rewardTrigger, setRewardTrigger] = useState(false);
   const [rewardType, setRewardType] = useState<'basic' | 'streak' | 'milestone' | 'jackpot' | 'legendary'>('basic');
-  const [rewardPoints, setRewardPoints] = useState(50);
+  const [rewardCoupons, setRewardCoupons] = useState<string[]>([]);
   const [rewardMultiplier, setRewardMultiplier] = useState(1);
+  const [achievementUnlocked, setAchievementUnlocked] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -59,19 +61,21 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
     return 'streak';
   };
 
-  // Calculate points based on objective properties
-  const calculatePoints = (obj: Objective) => {
-    let basePoints = 50;
+  // Calculate expected coupon rewards based on objective properties
+  const calculateExpectedCoupons = (obj: Objective) => {
+    const coupons = ['Instagram', 'YouTube', 'Snack'];
     
-    if (obj.objective_type === ObjectiveType.MAIN_OBJECTIVE) basePoints = 500;
-    else if (obj.objective_type === ObjectiveType.SUB_OBJECTIVE) basePoints = 200;
-    else if (obj.objective_type === ObjectiveType.TASK) basePoints = 50;
-    else if (obj.objective_type === ObjectiveType.HABIT) basePoints = 25;
+    if (obj.objective_type === ObjectiveType.MAIN_OBJECTIVE) {
+      return ['Netflix', 'Gaming', 'Nap', 'Snack'];
+    } else if (obj.objective_type === ObjectiveType.SUB_OBJECTIVE) {
+      return ['Instagram', 'YouTube', 'Music'];
+    } else if (obj.objective_type === ObjectiveType.TASK) {
+      return ['Instagram', 'Snack'];
+    } else if (obj.objective_type === ObjectiveType.HABIT) {
+      return ['Music'];
+    }
     
-    // Apply priority multiplier
-    basePoints *= (1 + obj.priority_score);
-    
-    return Math.round(basePoints);
+    return coupons;
   };
 
   // Calculate multiplier (simulate psychological bonuses)
@@ -96,28 +100,30 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
         
         // Extract gamification data from backend response
         const gamificationResult = result.gamification;
-        const actualPoints = gamificationResult?.points_awarded || calculatePoints(objective);
+        const actualCoupons = gamificationResult?.coupon_descriptions || calculateExpectedCoupons(objective);
         const multiplier = gamificationResult?.breakdown?.bonus_multiplier || 1;
+        const achievements = gamificationResult?.unlocked_achievements || [];
         
-                 // Determine tier based on backend response
-         let tier: 'basic' | 'streak' | 'milestone' | 'jackpot' | 'legendary' = 'basic';
-         if (gamificationResult?.level_up_message) tier = 'jackpot';
-         else if (multiplier >= 5) tier = 'jackpot';
-         else if (multiplier >= 2 || actualPoints >= 500) tier = 'milestone';
-         else if (objective.priority_score >= 0.8) tier = 'streak';
+        // Determine tier based on backend response
+        let tier: 'basic' | 'streak' | 'milestone' | 'jackpot' | 'legendary' = 'basic';
+        if (achievements.length > 0) tier = 'jackpot';
+        else if (multiplier >= 5) tier = 'jackpot';
+        else if (multiplier >= 2 || actualCoupons.length >= 3) tier = 'milestone';
+        else if (objective.priority_score >= 0.8) tier = 'streak';
         
-        setRewardPoints(actualPoints);
+        setRewardCoupons(actualCoupons);
         setRewardMultiplier(multiplier);
         setRewardType(tier);
+        setAchievementUnlocked(achievements.length > 0);
         setRewardTrigger(true);
         
         // Show backend-provided messages
         const bonusMessage = gamificationResult?.bonus_message;
-        const levelUpMessage = gamificationResult?.level_up_message;
-        const mysteryBoxEarned = gamificationResult?.mystery_box_earned;
+        const celebrationMessage = gamificationResult?.celebration;
+        const mysteryBoxEarned = gamificationResult?.mystery_box_progress?.earned;
         
-        let toastMessage = `🎯 +${actualPoints} XP earned!`;
-        if (levelUpMessage) toastMessage = `🎉 ${levelUpMessage}`;
+        let toastMessage = `🎫 ${actualCoupons.length} coupon${actualCoupons.length > 1 ? 's' : ''} earned!`;
+        if (celebrationMessage) toastMessage = `🎉 ${celebrationMessage}`;
         else if (bonusMessage) toastMessage = `✨ ${bonusMessage}`;
         
         toast.success(toastMessage);
@@ -125,19 +131,29 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
         // Show mystery box notification if earned
         if (mysteryBoxEarned) {
           setTimeout(() => {
-            toast.success("✨ Mystery Sphere earned! Check your achievements page!", { 
+            toast.success("✨ Mystery Box earned! Check your gamification dashboard!", { 
               duration: 6000,
-              icon: '🔮'
+              icon: '📦'
             });
           }, 1000);
         }
-             } else {
-         // For other status changes, use regular update
-         await objectivesApi.update(objective.id, { 
-           status: newStatus,
-           completion_percentage: objective.completion_percentage
-         });
-       }
+        
+        // Show achievement notification
+        if (achievements.length > 0) {
+          setTimeout(() => {
+            toast.success(`🏆 Achievement unlocked: ${achievements[0].name}!`, { 
+              duration: 6000,
+              icon: '🏆'
+            });
+          }, 1500);
+        }
+      } else {
+        // For other status changes, use regular update
+        await objectivesApi.update(objective.id, { 
+          status: newStatus,
+          completion_percentage: objective.completion_percentage
+        });
+      }
       
       onUpdate?.();
     } catch (error) {
@@ -350,12 +366,12 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
       />
       
       {/* Reward Animation */}
-      <RewardAnimation
+      <CouponRewardAnimation
         isVisible={rewardTrigger}
         tier={rewardType}
-        points={rewardPoints}
+        coupons={rewardCoupons}
         bonusMultiplier={rewardMultiplier}
-        levelUp={false}
+        achievementUnlocked={achievementUnlocked}
         priority={objective.priority_score}
         onComplete={() => setRewardTrigger(false)}
       />

@@ -27,14 +27,9 @@ async def lifespan(app: FastAPI):
     # Startup
     startup_logger.info(f"🚀 Starting {settings.app_name}")
     
-    # Ensure default user profile exists
-    try:
-        user_repo = UserProfileRepository()
-        await user_repo.ensure_default_profile()
-        startup_logger.info("✅ System ready")
-    except Exception as e:
-        startup_logger.error(f"❌ Startup failed: {e}")
-        raise
+    # Remove the problematic profile initialization that causes resets
+    # Profile will be created lazily when first accessed
+    startup_logger.info("✅ System ready")
     
     yield
     
@@ -97,11 +92,12 @@ if __name__ == "__main__":
     
     main_logger.info("🌟 Starting Auxilium server...")
     
-    # Run the app
+    # Run the app with safer development settings
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.debug,
+        reload_excludes=["*.json", "data/*", "logs/*"],  # Exclude data files from triggering reloads
         log_level="info"
     ) 

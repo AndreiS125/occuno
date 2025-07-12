@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID, uuid4
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from enum import Enum
 from pydantic import BaseModel, Field, validator
 
@@ -23,7 +23,40 @@ class EnergyLevel(str, Enum):
     MEDIUM = "medium"
     HIGH = "high"
 
+class CouponType(str, Enum):
+    JERK_OFF = "jerk_off"
+    SCROLL_INSTAGRAM = "scroll_instagram"
+    PLAY_GAMES = "play_games"
+    WATCH_YOUTUBE = "watch_youtube"
+    TAKE_NAP = "take_nap"
+    EAT_SNACK = "eat_snack"
+    WATCH_NETFLIX = "watch_netflix"
+    BROWSE_REDDIT = "browse_reddit"
+    LISTEN_MUSIC = "listen_music"
+    CHAT_FRIENDS = "chat_friends"
+
 # --- Gamification Models ---
+class CouponDefinition(BaseModel):
+    coupon_type: CouponType
+    display_name: str
+    description: str
+    icon: Optional[str] = None
+    duration_minutes: int = 15  # How long the activity lasts
+    rarity: str = "common"  # common, uncommon, rare, epic, legendary
+
+class EarnedCoupon(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    coupon_type: CouponType
+    earned_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime  # Same day expiration
+    used_at: Optional[datetime] = None
+    is_used: bool = False
+
+class MysteryBoxReward(BaseModel):
+    coupon_type: CouponType
+    quantity: int = 1
+    bonus_multiplier: float = 1.0  # For special rewards
+
 class AchievementDefinition(BaseModel):
     id: str  # Changed from UUID to str to support custom achievement IDs
     name: str
@@ -47,11 +80,17 @@ class UserProfile(BaseModel):
     last_streak_check_date: Optional[datetime] = None
     achievements: List[UserAchievement] = Field(default_factory=list)
     
-    # Enhanced Addictive Gamification
-    level: int = 1
-    experience_points: int = 0
-    experience_to_next_level: int = 100
-    lifetime_score: int = 0
+    # Coupon System (Replaces XP/Level)
+    earned_coupons: List[EarnedCoupon] = Field(default_factory=list)
+    total_coupons_earned: int = 0
+    total_coupons_used: int = 0
+    favorite_coupon_types: List[CouponType] = Field(default_factory=list)
+    
+    # Mystery Box System (Now awards coupons)
+    mystery_box_progress: int = 0
+    points_per_mystery_box: int = 100  # Increases linearly with each box
+    mystery_boxes_earned: int = 0
+    mystery_boxes_opened: int = 0
     
     # Streak System Enhancement
     longest_streak: int = 0
@@ -72,8 +111,6 @@ class UserProfile(BaseModel):
     bonus_multiplier_active: bool = False
     bonus_multiplier_value: float = 1.0
     bonus_multiplier_expires: Optional[datetime] = None
-    mystery_boxes_earned: int = 0
-    mystery_boxes_opened: int = 0
     
     # Progress Tracking
     daily_tasks_completed_today: int = 0
@@ -182,4 +219,5 @@ class Task(BaseObjective):
 class DataStore(BaseModel):
     user_profile: UserProfile
     objectives: List[Union[Objective, Task]] = Field(default_factory=list)
-    achievement_definitions: List[AchievementDefinition] = Field(default_factory=list) 
+    achievement_definitions: List[AchievementDefinition] = Field(default_factory=list)
+    coupon_definitions: List[CouponDefinition] = Field(default_factory=list) 

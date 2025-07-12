@@ -220,8 +220,8 @@ export default function Home() {
             <p className="text-sm text-muted-foreground">Weekly Rank</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-yellow-600">Level {gamificationStats?.level || 1}</p>
-            <p className="text-sm text-muted-foreground">Current Level</p>
+            <p className="text-2xl font-bold text-green-600">{gamificationStats?.current_coupons || 0}</p>
+            <p className="text-sm text-muted-foreground">Active Coupons</p>
           </div>
         </div>
       </div>
@@ -244,9 +244,9 @@ export default function Home() {
                   {gamificationStats.mystery_boxes_available} Available
                 </span>
               </div>
-              <h3 className="font-semibold mb-2">Mystery Spheres</h3>
+              <h3 className="font-semibold mb-2">Mystery Boxes</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Touch the sphere for magical color rewards!
+                Open boxes to discover coupon rewards!
               </p>
               <Button 
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
@@ -258,11 +258,11 @@ export default function Home() {
                       fetchGamificationData();
                     }
                   } catch (error) {
-                    toast.error("Failed to open mystery sphere");
+                    toast.error("Failed to open mystery box");
                   }
                 }}
               >
-                Touch Mystery Sphere
+                Open Mystery Box
               </Button>
             </Card>
           )}
@@ -354,7 +354,7 @@ export default function Home() {
                      </div>
                      <div className="text-right">
                        <p className="text-sm text-primary font-medium">
-                         +{Math.round((objective.completion_percentage || 0) * 10)} XP
+                         {objective.completion_percentage > 0 ? 'Coupons earned!' : 'Complete for coupons'}
                        </p>
                      </div>
                    </motion.div>
@@ -363,7 +363,7 @@ export default function Home() {
                  <div className="text-center py-8">
                    <Target className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
                    <p className="text-muted-foreground mb-4">
-                     No active objectives. Create your first one to start earning XP!
+                     No active objectives. Create your first one to start earning coupons!
                    </p>
                    <Button>
                      <Plus className="w-4 h-4 mr-2" />
@@ -382,7 +382,7 @@ export default function Home() {
       </div>
 
       {/* Psychological Motivation Section */}
-      {(gamificationStats?.near_miss_count > 0 || dailyStatus?.psychological_hooks) && (
+      {(gamificationStats?.current_coupons > 0 || dailyStatus?.psychological_hooks) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -390,23 +390,23 @@ export default function Home() {
         >
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <TrendingUp className="w-5 h-5 mr-2 text-yellow-600" />
-            Momentum Building 🔥
+            Rewards Building 🎫
           </h3>
           <div className="grid md:grid-cols-2 gap-4">
-            {gamificationStats?.near_miss_count > 0 && (
+            {gamificationStats?.current_coupons > 0 && (
               <div className="bg-white/50 rounded-lg p-4">
-                <p className="font-medium text-yellow-800 mb-2">🎯 So Close to Breakthrough!</p>
+                <p className="font-medium text-yellow-800 mb-2">🎁 Coupons Ready to Use!</p>
                 <p className="text-sm text-yellow-700">
-                  You almost hit {gamificationStats.near_miss_count} major milestone{gamificationStats.near_miss_count > 1 ? 's' : ''}! 
-                  The next task could trigger that satisfying achievement unlock.
+                  You have {gamificationStats.current_coupons} coupon{gamificationStats.current_coupons > 1 ? 's' : ''} waiting! 
+                  Use them today before they expire - treat yourself to some well-deserved rewards.
                 </p>
               </div>
             )}
-            {dailyStatus?.psychological_hooks?.perfectionist_mode && (
+            {dailyStatus?.psychological_hooks?.coupon_pressure && (
               <div className="bg-white/50 rounded-lg p-4">
-                <p className="font-medium text-orange-800 mb-2">💎 Perfectionist Mode Active</p>
+                <p className="font-medium text-orange-800 mb-2">⏰ Expiration Alert</p>
                 <p className="text-sm text-orange-700">
-                  You're in the zone! Complete your daily goal perfectly for maximum psychological satisfaction.
+                  Some coupons expire today! Complete more tasks to earn fresh rewards, or use your current ones before they're gone.
                 </p>
               </div>
             )}

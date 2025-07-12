@@ -25,18 +25,22 @@ import {
 import { userApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { MysteryBoxRealistic } from "@/components/ui";
 import { GamificationExplainer } from "@/components/ui/gamification-explainer";
+import { Coupon } from "@/types";
 
 export default function AchievementsPage() {
   const [userStats, setUserStats] = useState<any>(null);
   const [dailyStatus, setDailyStatus] = useState<any>(null);
   const [achievementDefinitions, setAchievementDefinitions] = useState<any[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [mysteryBoxOpening, setMysteryBoxOpening] = useState(false);
   const [lastReward, setLastReward] = useState<any>(null);
   const [showMysteryBox3D, setShowMysteryBox3D] = useState(false);
+  const [showAllCoupons, setShowAllCoupons] = useState(false);
   
   // Refs for GSAP animations
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,14 +57,16 @@ export default function AchievementsPage() {
 
   const fetchData = async () => {
     try {
-      const [enhancedStats, dailyStatusData, definitions] = await Promise.all([
+      const [enhancedStats, dailyStatusData, definitions, couponsData] = await Promise.all([
         userApi.getEnhancedGamificationStats(),
         userApi.getDailyStatus(),
-        userApi.getAchievementDefinitions()
+        userApi.getAchievementDefinitions(),
+        userApi.getAvailableCoupons()
       ]);
       
       setUserStats(enhancedStats);
       setDailyStatus(dailyStatusData);
+      setCoupons(couponsData.active_coupons || []);
       
       // Map backend definitions to frontend format with icons and colors
       const mappedDefinitions = definitions.map((def: any) => ({
@@ -103,6 +109,20 @@ export default function AchievementsPage() {
 
   const handle3DMysteryBoxClose = () => {
     setShowMysteryBox3D(false);
+  };
+
+  const handleUseCoupon = async (couponId: string) => {
+    try {
+      const result = await userApi.useCoupon(couponId);
+      if (result.success) {
+        toast.success(`🎉 ${result.celebration}`);
+        fetchData(); // Refresh to update coupon list
+      } else {
+        toast.error(result.message || "Failed to use coupon");
+      }
+    } catch (error) {
+      toast.error("Failed to use coupon");
+    }
   };
 
   // Helper functions to map achievement IDs to UI elements
@@ -159,6 +179,10 @@ export default function AchievementsPage() {
   const isUnlocked = (achievementId: string) => {
     return unlockedAchievements.some((a: any) => a.achievement_id === achievementId);
   };
+
+  // Get coupons to display
+  const displayedCoupons = showAllCoupons ? coupons : coupons.slice(0, 4);
+  const expiringSoonCoupons = coupons.filter(c => c.hours_left < 6);
 
   // GSAP animations
   useGSAP(() => {
@@ -231,8 +255,8 @@ export default function AchievementsPage() {
       {/* Page Header with Explainer */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">🏆 Achievements</h1>
-          <p className="text-muted-foreground">Track your progress and unlock rewards</p>
+          <h1 className="text-3xl font-bold">🏆 Achievements & Rewards</h1>
+          <p className="text-muted-foreground">Track your progress, unlock rewards, and use your earned coupons</p>
         </div>
         <GamificationExplainer />
       </div>
@@ -244,6 +268,15 @@ export default function AchievementsPage() {
           <p className="text-3xl font-bold mb-1">{totalScore}</p>
           <p className="text-muted-foreground">Total Score</p>
           <p className="text-xs text-green-600 mt-1">Lifetime: {userStats?.lifetime_score || 0}</p>
+        </div>
+
+        <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
+          <div className="flex items-center justify-center mb-2">
+            <Ticket className="w-12 h-12 text-purple-500" />
+          </div>
+          <p className="text-3xl font-bold mb-1">{userStats?.current_coupons || 0}</p>
+          <p className="text-muted-foreground">Active Coupons</p>
+          <p className="text-xs text-purple-600 mt-1">Total earned: {userStats?.total_coupons_earned || 0}</p>
         </div>
 
         <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
@@ -261,13 +294,6 @@ export default function AchievementsPage() {
         </div>
 
         <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
-          <Crown className="w-12 h-12 text-purple-500 mx-auto mb-2" />
-          <p className="text-3xl font-bold mb-1">#{userStats?.rank_this_week || 1}</p>
-          <p className="text-muted-foreground">Weekly Rank</p>
-          <p className="text-xs text-purple-600 mt-1">Season #{userStats?.competitive_season || 1}</p>
-        </div>
-
-        <div className="stat-card bg-card border border-border rounded-xl p-6 text-center">
           <Trophy className="w-12 h-12 text-blue-500 mx-auto mb-2" />
           <p className="text-3xl font-bold mb-1">
             {unlockedAchievements.length}/{achievementDefinitions.length}
@@ -276,6 +302,92 @@ export default function AchievementsPage() {
           <p className="text-xs text-green-600 mt-1">Level {userStats?.level || 1}</p>
         </div>
       </div>
+
+      {/* Available Coupons Section */}
+      {coupons.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold flex items-center">
+              <Gift className="w-6 h-6 mr-2 text-purple-500" />
+              Your Active Coupons ({coupons.length})
+            </h2>
+            {coupons.length > 4 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAllCoupons(!showAllCoupons)}
+              >
+                {showAllCoupons ? 'Show Less' : `Show All (${coupons.length})`}
+              </Button>
+            )}
+          </div>
+
+          {/* Expiration Warning */}
+          {expiringSoonCoupons.length > 0 && (
+            <div className="mb-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-800/10 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
+                <span className="font-medium text-yellow-800 dark:text-yellow-200">
+                  ⏰ {expiringSoonCoupons.length} coupon{expiringSoonCoupons.length > 1 ? 's' : ''} expire{expiringSoonCoupons.length === 1 ? 's' : ''} in under 6 hours!
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayedCoupons.map((coupon) => (
+              <motion.div
+                key={coupon.id}
+                className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-800/10 border border-purple-200 dark:border-purple-700 rounded-lg p-4"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center">
+                    <Ticket className="w-5 h-5 text-purple-600 mr-2" />
+                    <h3 className="font-semibold text-purple-800 dark:text-purple-200">
+                      {coupon.display_name}
+                    </h3>
+                  </div>
+                  <Badge 
+                    variant={coupon.hours_left < 6 ? "destructive" : coupon.hours_left < 12 ? "default" : "secondary"}
+                    className="text-xs"
+                  >
+                    {coupon.hours_left < 1 ? "< 1h" : `${Math.floor(coupon.hours_left)}h left`}
+                  </Badge>
+                </div>
+
+                <p className="text-sm text-purple-600 dark:text-purple-300 mb-3">
+                  {coupon.description}
+                </p>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-purple-500 dark:text-purple-400">
+                    {coupon.duration_minutes} min • {coupon.rarity}
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => handleUseCoupon(coupon.id)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    Use Now
+                  </Button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Coupon Usage Stats */}
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            <p>
+              📊 Total earned: {userStats?.total_coupons_earned || 0} • 
+              Used: {userStats?.total_coupons_used || 0} • 
+              Usage rate: {Math.round((userStats?.coupon_usage_rate || 0) * 100)}%
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Psychological Engagement Cards */}
       <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -293,14 +405,14 @@ export default function AchievementsPage() {
               <span>Tasks Today</span>
               <span className="font-medium">{dailyStatus?.daily_tasks_completed || 0}/{dailyStatus?.daily_task_goal || 3}</span>
             </div>
-                            <div className="w-full bg-blue-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                    style={{ 
-                      width: `${Math.min(((dailyStatus?.daily_tasks_completed || 0) / (dailyStatus?.daily_task_goal || 3)) * 100, 100)}%` 
-                    }}
-                  />
-                </div>
+            <div className="w-full bg-blue-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                style={{ 
+                  width: `${Math.min(((dailyStatus?.daily_tasks_completed || 0) / (dailyStatus?.daily_task_goal || 3)) * 100, 100)}%` 
+                }}
+              />
+            </div>
             {dailyStatus?.daily_bonus_available && (
               <p className="text-xs text-blue-700 font-medium">🎁 Daily bonus ready!</p>
             )}
@@ -529,7 +641,7 @@ export default function AchievementsPage() {
       </div>
 
       {/* 3D Mystery Box */}
-              <MysteryBoxRealistic 
+      <MysteryBoxRealistic 
         isOpen={showMysteryBox3D}
         onOpen={handle3DMysteryBoxOpen}
         onClose={handle3DMysteryBoxClose}

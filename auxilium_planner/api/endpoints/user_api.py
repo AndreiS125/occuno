@@ -1,8 +1,9 @@
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from uuid import UUID
 
-from repositories import UserProfileRepository
+from repositories.user_profile_repository import UserProfileRepository
 from services.gamification_service import GamificationService
 
 router = APIRouter(tags=["user"])
@@ -37,19 +38,34 @@ class UpdatePreferencesRequest(BaseModel):
     timezone: Optional[str] = None
     preferred_work_hours: Optional[Dict[str, Any]] = None
 
+class CouponResponse(BaseModel):
+    id: str
+    type: str
+    display_name: str
+    description: str
+    duration_minutes: int
+    rarity: str
+    expires_at: str
+    hours_left: float
+
 class MysteryBoxResponse(BaseModel):
     success: bool
     reward_type: Optional[str] = None
     reward_description: Optional[str] = None
-    points_awarded: Optional[int] = None
+    coupons_earned: Optional[int] = None
+    coupon_descriptions: Optional[List[str]] = None
     boxes_remaining: Optional[int] = None
     celebration: Optional[str] = None
     message: Optional[str] = None
+    wheel_result: Optional[Dict[str, Any]] = None
 
 class DailyStatusResponse(BaseModel):
-    level: int
-    experience_points: int
-    experience_to_next_level: int
+    current_coupons: int
+    total_coupons_earned: int
+    total_coupons_used: int
+    mystery_box_progress: int
+    mystery_box_needed: int
+    mystery_box_progress_pct: float
     current_streak: int
     daily_tasks_completed: int
     daily_task_goal: int
@@ -63,13 +79,22 @@ class DailyStatusResponse(BaseModel):
     urgency_factors: Dict[str, bool]
 
 class EnhancedGamificationStatsResponse(BaseModel):
-    # Core stats
-    level: int
-    experience_points: int
-    experience_to_next_level: int
-    progress_to_next_level: float
+    # Core coupon stats
+    current_coupons: int
+    total_coupons_earned: int
+    total_coupons_used: int
+    coupon_usage_rate: float
+    
+    # Mystery box system
+    mystery_box_progress: int
+    mystery_box_needed: int
+    mystery_box_progress_pct: float
+    mystery_boxes_earned: int
+    mystery_boxes_opened: int
+    mystery_boxes_available: int
+    
+    # Legacy score tracking
     overall_score: int
-    lifetime_score: int
     
     # Streak system
     current_streak: int
@@ -90,14 +115,10 @@ class EnhancedGamificationStatsResponse(BaseModel):
     seasonal_rank: int
     
     # Rewards & Bonuses
-    mystery_boxes_earned: int
-    mystery_boxes_opened: int
-    mystery_boxes_available: int
     daily_bonus_available: bool
     consecutive_daily_bonuses: int
     
     # Psychological metrics
-    near_miss_count: int
     comeback_bonus_available: bool
     days_since_last_activity: int
     progress_decay_warning: bool
@@ -105,6 +126,16 @@ class EnhancedGamificationStatsResponse(BaseModel):
     # Achievements
     total_achievements: int
     recent_achievements: List[Dict[str, Any]]
+
+class CouponDefinitionResponse(BaseModel):
+    coupon_type: str
+    display_name: str
+    description: str
+    duration_minutes: int
+    rarity: str
+
+class MysteryBoxRequest(BaseModel):
+    frontend_choice: Optional[Dict[str, Any]] = Field(None, description="Frontend wheel choice data")
 
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_user_profile(
@@ -174,13 +205,21 @@ async def update_preferences(
 async def get_enhanced_gamification_stats(
     user_repo: UserProfileRepository = Depends(get_user_repo)
 ):
-    """Get comprehensive gamification statistics with psychological metrics."""
+    """Get comprehensive gamification statistics with coupon system."""
     profile = await user_repo.ensure_default_profile()
     
-    # Calculate progress to next level
-    progress_to_next_level = 0.0
-    if profile.experience_to_next_level > 0:
-        progress_to_next_level = profile.experience_points / profile.experience_to_next_level
+    # Calculate coupon usage rate
+    coupon_usage_rate = 0.0
+    if profile.total_coupons_earned > 0:
+        coupon_usage_rate = profile.total_coupons_used / profile.total_coupons_earned
+    
+    # Calculate mystery box progress
+    mystery_box_progress_pct = 0.0
+    if profile.points_per_mystery_box > 0:
+        mystery_box_progress_pct = (profile.mystery_box_progress / profile.points_per_mystery_box) * 100
+    
+    # Current active coupons
+    current_coupons = len([c for c in profile.earned_coupons if not c.is_used])
     
     # Recent achievements
     recent_achievements = [
@@ -196,13 +235,22 @@ async def get_enhanced_gamification_stats(
     ]
     
     return EnhancedGamificationStatsResponse(
-        # Core stats
-        level=profile.level,
-        experience_points=profile.experience_points,
-        experience_to_next_level=profile.experience_to_next_level,
-        progress_to_next_level=progress_to_next_level,
+        # Core coupon stats
+        current_coupons=current_coupons,
+        total_coupons_earned=profile.total_coupons_earned,
+        total_coupons_used=profile.total_coupons_used,
+        coupon_usage_rate=coupon_usage_rate,
+        
+        # Mystery box system
+        mystery_box_progress=profile.mystery_box_progress,
+        mystery_box_needed=profile.points_per_mystery_box,
+        mystery_box_progress_pct=mystery_box_progress_pct,
+        mystery_boxes_earned=profile.mystery_boxes_earned,
+        mystery_boxes_opened=profile.mystery_boxes_opened,
+        mystery_boxes_available=profile.mystery_boxes_earned - profile.mystery_boxes_opened,
+        
+        # Legacy score tracking
         overall_score=profile.overall_score,
-        lifetime_score=profile.lifetime_score,
         
         # Streak system
         current_streak=profile.current_streak_days,
@@ -223,14 +271,10 @@ async def get_enhanced_gamification_stats(
         seasonal_rank=profile.seasonal_rank,
         
         # Rewards & Bonuses
-        mystery_boxes_earned=profile.mystery_boxes_earned,
-        mystery_boxes_opened=profile.mystery_boxes_opened,
-        mystery_boxes_available=profile.mystery_boxes_earned - profile.mystery_boxes_opened,
         daily_bonus_available=profile.daily_bonus_available,
         consecutive_daily_bonuses=profile.consecutive_daily_bonuses,
         
         # Psychological metrics
-        near_miss_count=profile.near_miss_count,
         comeback_bonus_available=profile.comeback_bonus_available,
         days_since_last_activity=profile.days_since_last_activity,
         progress_decay_warning=profile.progress_decay_warning,
@@ -244,7 +288,7 @@ async def get_enhanced_gamification_stats(
 async def get_daily_status(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
-    """Get daily status with psychological hooks and urgency factors."""
+    """Get daily status with coupon system and psychological hooks."""
     try:
         status = await gamification.get_daily_status()
         return DailyStatusResponse(**status)
@@ -253,11 +297,12 @@ async def get_daily_status(
 
 @router.post("/gamification/mystery-box", response_model=MysteryBoxResponse)
 async def open_mystery_box(
+    request: MysteryBoxRequest,
     gamification: GamificationService = Depends(get_gamification_service)
 ):
-    """Open a mystery box and receive variable rewards."""
+    """Open a mystery box and receive coupon rewards."""
     try:
-        result = await gamification.open_mystery_box()
+        result = await gamification.open_mystery_box(frontend_choice=request.frontend_choice)
         return MysteryBoxResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error opening mystery box: {str(e)}")
@@ -266,23 +311,75 @@ async def open_mystery_box(
 async def claim_daily_bonus(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
-    """Claim daily bonus if available."""
+    """Claim daily bonus and receive coupon rewards."""
     try:
         result = await gamification.claim_daily_bonus()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error claiming daily bonus: {str(e)}")
 
+@router.get("/coupons", response_model=Dict[str, Any])
+async def get_available_coupons(
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Get user's available coupons with expiration info."""
+    try:
+        result = await gamification.get_available_coupons()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching coupons: {str(e)}")
+
+@router.post("/coupons/{coupon_id}/use")
+async def use_coupon(
+    coupon_id: str,
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Use a coupon to redeem the reward."""
+    try:
+        coupon_uuid = UUID(coupon_id)
+        result = await gamification.use_coupon(coupon_uuid)
+        return result
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid coupon ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error using coupon: {str(e)}")
+
+@router.get("/coupons/definitions", response_model=List[CouponDefinitionResponse])
+async def get_coupon_definitions(
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Get all available coupon types and their properties."""
+    try:
+        definitions = await gamification.get_coupon_definitions()
+        return [
+            CouponDefinitionResponse(
+                coupon_type=coupon_def.coupon_type.value,
+                display_name=coupon_def.display_name,
+                description=coupon_def.description,
+                duration_minutes=coupon_def.duration_minutes,
+                rarity=coupon_def.rarity
+            )
+            for coupon_def in definitions
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching coupon definitions: {str(e)}")
+
 @router.get("/gamification/legacy-stats")
 async def get_gamification_stats(
     user_repo: UserProfileRepository = Depends(get_user_repo),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
-    """Get detailed gamification statistics (legacy endpoint)."""
+    """Get detailed gamification statistics (legacy endpoint with coupon support)."""
     profile = await user_repo.ensure_default_profile()
+    
+    # Current active coupons
+    current_coupons = len([c for c in profile.earned_coupons if not c.is_used])
     
     return {
         "overall_score": profile.overall_score,
+        "current_coupons": current_coupons,
+        "total_coupons_earned": profile.total_coupons_earned,
+        "total_coupons_used": profile.total_coupons_used,
         "current_streak": {
             "days": profile.current_streak_days,
             "last_check": profile.last_streak_check_date.isoformat() if profile.last_streak_check_date else None
@@ -308,7 +405,6 @@ async def check_and_update_streak(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Manually check and update streak status."""
-    # Note: This calls the old method, should be updated to use new system
     try:
         user_repo = get_user_repo()
         profile = await user_repo.ensure_default_profile()
@@ -317,17 +413,6 @@ async def check_and_update_streak(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating streak: {str(e)}")
-
-@router.post("/gamification/recalculate-level")
-async def recalculate_user_level(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Recalculate user level based on current XP to fix leveling bugs."""
-    try:
-        result = await gamification.recalculate_user_level()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error recalculating level: {str(e)}")
 
 @router.get("/gamification/achievements")
 async def get_achievement_definitions(
