@@ -126,8 +126,10 @@ export const userApi = {
     return response.data;
   },
 
-  openMysteryBox: async () => {
-    const response = await api.post("/user/gamification/mystery-box");
+  openMysteryBox: async (frontendChoice?: any) => {
+    const response = await api.post("/user/gamification/mystery-box", {
+      frontend_choice: frontendChoice
+    });
     return response.data;
   },
 
@@ -149,6 +151,22 @@ export const userApi = {
   checkStreak: async () => {
     const { data } = await api.post("/user/gamification/check-streak");
     return data;
+  },
+
+  // Coupon system endpoints
+  getAvailableCoupons: async () => {
+    const response = await api.get("/user/coupons");
+    return response.data;
+  },
+
+  useCoupon: async (couponId: string) => {
+    const response = await api.post(`/user/coupons/${couponId}/use`);
+    return response.data;
+  },
+
+  getCouponDefinitions: async () => {
+    const response = await api.get("/user/coupons/definitions");
+    return response.data;
   },
 };
 

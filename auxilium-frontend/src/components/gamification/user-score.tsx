@@ -5,45 +5,54 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Trophy, 
   Flame, 
-  Star, 
+  Ticket, 
   Gift, 
-  Crown, 
+  Clock, 
   TrendingUp, 
   AlertTriangle,
   Sparkles,
-  Timer
+  Timer,
+  Package,
+  Award,
+  Zap
 } from "lucide-react";
 import { userApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import toast from "react-hot-toast";
 import { MysteryBoxRealistic } from "@/components/ui";
+import { Coupon, DailyStatus, GamificationStats } from "@/types";
 
 interface UserScoreProps {
   className?: string;
 }
 
 export default function UserScore({ className = "" }: UserScoreProps) {
-  const [stats, setStats] = useState<any>(null);
-  const [dailyStatus, setDailyStatus] = useState<any>(null);
+  const [stats, setStats] = useState<GamificationStats | null>(null);
+  const [dailyStatus, setDailyStatus] = useState<DailyStatus | null>(null);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [mysteryBoxAnimating, setMysteryBoxAnimating] = useState(false);
   const [showMysteryBox3D, setShowMysteryBox3D] = useState(false);
 
   useEffect(() => {
     fetchStats();
-    // Refresh every minute to keep psychological hooks fresh
+    // Refresh every minute to keep coupons and psychological hooks fresh
     const interval = setInterval(fetchStats, 60000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchStats = async () => {
     try {
-      const [enhancedStats, dailyStatusData] = await Promise.all([
+      const [enhancedStats, dailyStatusData, couponsData] = await Promise.all([
         userApi.getEnhancedGamificationStats(),
-        userApi.getDailyStatus()
+        userApi.getDailyStatus(),
+        userApi.getAvailableCoupons()
       ]);
       setStats(enhancedStats);
       setDailyStatus(dailyStatusData);
+      setCoupons(couponsData.active_coupons || []);
     } catch (error) {
       console.error("Failed to fetch user stats:", error);
     } finally {
@@ -62,6 +71,10 @@ export default function UserScore({ className = "" }: UserScoreProps) {
     const result = await userApi.openMysteryBox();
     
     if (result.success) {
+      // Show celebration for coupons earned
+      if (result.coupons_earned > 0) {
+        toast.success(`🎉 ${result.celebration} - ${result.coupons_earned} coupons earned!`);
+      }
       // Immediate refresh for psychological satisfaction
       setTimeout(fetchStats, 500);
       return result;
@@ -72,6 +85,20 @@ export default function UserScore({ className = "" }: UserScoreProps) {
 
   const handle3DMysteryBoxClose = () => {
     setShowMysteryBox3D(false);
+  };
+
+  const handleUseCoupon = async (couponId: string) => {
+    try {
+      const result = await userApi.useCoupon(couponId);
+      if (result.success) {
+        toast.success(`🎉 ${result.celebration}`);
+        fetchStats();
+      } else {
+        toast.error(result.message || "Failed to use coupon");
+      }
+    } catch (error) {
+      toast.error("Failed to use coupon");
+    }
   };
 
   if (loading) {
@@ -85,10 +112,12 @@ export default function UserScore({ className = "" }: UserScoreProps) {
     );
   }
 
-  const levelProgress = ((stats?.experience_points || 0) / (stats?.experience_to_next_level || 100)) * 100;
+  const mysteryBoxProgress = ((stats?.mystery_box_progress || 0) / (stats?.mystery_box_needed || 100)) * 100;
   const hasUrgentActions = dailyStatus?.urgency_factors?.streak_at_risk || 
-                          dailyStatus?.urgency_factors?.daily_goal_pending ||
+                          dailyStatus?.urgency_factors?.coupons_expiring ||
                           dailyStatus?.urgency_factors?.bonus_expiring;
+
+  const expiringSoonCoupons = coupons.filter(c => c.hours_left < 6);
 
   return (
     <motion.div 
@@ -97,11 +126,11 @@ export default function UserScore({ className = "" }: UserScoreProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Header with Level and Urgency */}
+      {/* Header with Coupons and Urgency */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">
-          <Crown className="w-5 h-5 text-purple-500" />
-          <span className="font-bold text-lg">Level {stats?.level || 1}</span>
+          <Ticket className="w-5 h-5 text-purple-500" />
+          <span className="font-bold text-lg">{stats?.current_coupons || 0} Coupons</span>
           {hasUrgentActions && (
             <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
           )}
@@ -112,29 +141,29 @@ export default function UserScore({ className = "" }: UserScoreProps) {
         </div>
       </div>
 
-      {/* Score and Streak */}
+      {/* Coupon Stats */}
       <div className="grid grid-cols-3 gap-3 mb-3">
         <div className="text-center">
           <div className="flex items-center justify-center mb-1">
-            <Trophy className="w-4 h-4 text-yellow-500 mr-1" />
-            <span className="text-lg font-bold">{stats?.overall_score || 0}</span>
+            <Ticket className="w-4 h-4 text-green-500 mr-1" />
+            <span className="text-lg font-bold">{stats?.total_coupons_earned || 0}</span>
           </div>
-          <p className="text-xs text-muted-foreground">Score</p>
+          <p className="text-xs text-muted-foreground">Earned</p>
         </div>
         
         <div className="text-center">
           <div className="flex items-center justify-center mb-1">
-            <Star className="w-4 h-4 text-blue-500 mr-1" />
-            <span className="text-lg font-bold">{stats?.experience_points || 0}</span>
+            <Zap className="w-4 h-4 text-blue-500 mr-1" />
+            <span className="text-lg font-bold">{stats?.total_coupons_used || 0}</span>
           </div>
-          <p className="text-xs text-muted-foreground">XP</p>
+          <p className="text-xs text-muted-foreground">Used</p>
         </div>
         
         <div className="text-center">
           <div className="flex items-center justify-center mb-1">
             <Flame className="w-4 h-4 text-orange-500 mr-1" />
             <span className="text-lg font-bold">{stats?.current_streak || 0}</span>
-            {stats?.streak_multiplier > 1 && (
+            {stats?.streak_multiplier && stats.streak_multiplier > 1 && (
               <span className="ml-1 text-xs bg-orange-100 text-orange-800 px-1 py-0.5 rounded">
                 {stats.streak_multiplier}x
               </span>
@@ -144,29 +173,71 @@ export default function UserScore({ className = "" }: UserScoreProps) {
         </div>
       </div>
 
-      {/* Level Progress Bar */}
+      {/* Mystery Box Progress */}
       <div className="mb-3">
         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-          <span>Level {stats?.level || 1} Progress</span>
-          <span>{stats?.experience_points || 0} / {(stats?.experience_points || 0) + (stats?.experience_to_next_level || 100)} XP</span>
+          <span>Mystery Box Progress</span>
+          <span>{stats?.mystery_box_progress || 0} / {stats?.mystery_box_needed || 100} pts</span>
         </div>
         <div className="w-full bg-muted rounded-full h-2">
           <motion.div 
-            className="bg-gradient-to-r from-primary to-secondary h-2 rounded-full"
+            className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full"
             initial={{ width: 0 }}
-            animate={{ width: `${Math.min(levelProgress, 100)}%` }}
+            animate={{ width: `${Math.min(mysteryBoxProgress, 100)}%` }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           />
         </div>
         <div className="text-center text-xs text-muted-foreground mt-1">
-          {stats?.experience_to_next_level || 100} XP to Level {(stats?.level || 1) + 1}
+          {(stats?.mystery_box_needed || 100) - (stats?.mystery_box_progress || 0)} pts to next box
         </div>
       </div>
 
+      {/* Available Coupons */}
+      {coupons.length > 0 && (
+        <div className="mb-3">
+          <h4 className="text-sm font-medium mb-2 flex items-center justify-between">
+            <span className="flex items-center">
+              <Gift className="w-4 h-4 mr-1" />
+              Available Rewards ({coupons.length})
+            </span>
+            {coupons.length > 0 && (
+              <span className="text-xs text-purple-600">
+                {expiringSoonCoupons.length > 0 && `${expiringSoonCoupons.length} expiring soon`}
+              </span>
+            )}
+          </h4>
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {coupons.map((coupon) => (
+              <div key={coupon.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs">
+                <div className="flex items-center space-x-2 flex-1">
+                  <span className="font-medium truncate">{coupon.display_name}</span>
+                  <Badge variant={coupon.hours_left < 6 ? "destructive" : "secondary"} className="text-xs px-1 py-0 shrink-0">
+                    {coupon.hours_left < 1 ? "< 1h" : `${Math.floor(coupon.hours_left)}h`}
+                  </Badge>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleUseCoupon(coupon.id)}
+                  className="text-xs px-2 py-1 ml-2 shrink-0"
+                >
+                  Use
+                </Button>
+              </div>
+            ))}
+          </div>
+          {coupons.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-2">
+              🎯 Complete tasks to earn coupons!
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Quick Actions */}
       <div className="space-y-2">
-        {/* Mystery Sphere Quick Action */}
-        {stats?.mystery_boxes_available > 0 && (
+        {/* Mystery Box Quick Action */}
+        {stats?.mystery_boxes_available && stats.mystery_boxes_available > 0 && (
           <Button
             onClick={handleQuickMysteryBox}
             disabled={mysteryBoxAnimating}
@@ -176,12 +247,12 @@ export default function UserScore({ className = "" }: UserScoreProps) {
             {mysteryBoxAnimating ? (
               <div className="flex items-center">
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
-                Opening Sphere...
+                Opening Box...
               </div>
             ) : (
               <div className="flex items-center">
-                <Sparkles className="w-3 h-3 mr-2" />
-                Touch Mystery Sphere ({stats.mystery_boxes_available})
+                <Package className="w-3 h-3 mr-2" />
+                Open Mystery Box ({stats.mystery_boxes_available})
               </div>
             )}
           </Button>
@@ -192,9 +263,13 @@ export default function UserScore({ className = "" }: UserScoreProps) {
           <Button
             onClick={async () => {
               try {
-                await userApi.claimDailyBonus();
-                toast.success("🎁 Daily bonus claimed!");
-                fetchStats();
+                const result = await userApi.claimDailyBonus();
+                if (result.success) {
+                  toast.success(`🎁 ${result.celebration}`);
+                  fetchStats();
+                } else {
+                  toast.error(result.message || "Failed to claim bonus");
+                }
               } catch (error) {
                 toast.error("Failed to claim bonus");
               }
@@ -222,56 +297,73 @@ export default function UserScore({ className = "" }: UserScoreProps) {
                 <span className="text-xs font-medium text-red-800 dark:text-red-200">Urgent!</span>
               </div>
               <div className="text-xs text-red-700 dark:text-red-300 space-y-0.5">
-                {dailyStatus.urgency_factors.streak_at_risk && (
+                {dailyStatus?.urgency_factors?.streak_at_risk && (
                   <p>🔥 Streak at risk!</p>
                 )}
-                {dailyStatus.urgency_factors.daily_goal_pending && (
-                  <p>🎯 Daily goal expires soon!</p>
+                {dailyStatus?.urgency_factors?.coupons_expiring && (
+                  <p>🎫 Coupons expiring today!</p>
                 )}
-                {dailyStatus.urgency_factors.bonus_expiring && (
-                  <p>⚡ Bonuses expiring!</p>
+                {dailyStatus?.urgency_factors?.bonus_expiring && (
+                  <p>⚡ Daily bonus expiring!</p>
                 )}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Motivational Hooks */}
-        {stats?.near_miss_count > 0 && (
+        {/* Expiration Warning */}
+        {expiringSoonCoupons.length > 0 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-800/10 border border-yellow-200 dark:border-yellow-700 rounded-lg p-2"
           >
-            <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">🎯 So Close!</p>
+            <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">⏰ Use Soon!</p>
             <p className="text-xs text-yellow-700 dark:text-yellow-300">
-              Almost hit {stats.near_miss_count} milestone{stats.near_miss_count > 1 ? 's' : ''}!
+              {expiringSoonCoupons.length} coupon{expiringSoonCoupons.length > 1 ? 's' : ''} expire{expiringSoonCoupons.length === 1 ? 's' : ''} in under 6 hours
             </p>
           </motion.div>
         )}
 
-        {/* Weekly Challenge Tease */}
-        {dailyStatus?.weekly_challenge_available && (
+        {/* Encouragement Messages */}
+        {stats?.current_coupons === 0 && stats?.total_coupons_earned > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-800/10 border border-blue-200 dark:border-blue-700 rounded-lg p-2"
+          >
+            <p className="text-xs font-medium text-blue-800 dark:text-blue-200">💪 Keep Going!</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              You've earned {stats.total_coupons_earned} coupons so far. Complete more tasks to earn rewards!
+            </p>
+          </motion.div>
+        )}
+
+        {/* First-time encouragement */}
+        {stats?.total_coupons_earned === 0 && (
           <div className="text-center py-2">
             <p className="text-xs text-muted-foreground">
-              🏆 Weekly challenge ready
+              🎯 Complete tasks to earn your first coupons!
             </p>
           </div>
         )}
       </div>
 
-      {/* Progress Stars */}
+      {/* Usage Rate Stars */}
       <div className="flex justify-center space-x-1 mt-3 pt-3 border-t border-border">
         {[...Array(5)].map((_, i) => (
-          <Star 
+          <Trophy 
             key={i}
-            className={`w-3 h-3 ${i < Math.floor(levelProgress / 20) ? 'text-yellow-500 fill-current' : 'text-muted-foreground'}`} 
+            className={`w-3 h-3 ${i < Math.floor((stats?.coupon_usage_rate || 0) * 5) ? 'text-yellow-500 fill-current' : 'text-muted-foreground'}`} 
           />
         ))}
       </div>
+      <div className="text-center text-xs text-muted-foreground mt-1">
+        {Math.round((stats?.coupon_usage_rate || 0) * 100)}% coupons used
+      </div>
 
       {/* 3D Mystery Box */}
-              <MysteryBoxRealistic 
+      <MysteryBoxRealistic 
         isOpen={showMysteryBox3D}
         onOpen={handle3DMysteryBoxOpen}
         onClose={handle3DMysteryBoxClose}

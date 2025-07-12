@@ -22,18 +22,58 @@ class UserProfileRepository:
         try:
             data = await self.file_repo.load_data()
             
-            if "user_profile" not in data or not data["user_profile"]:
-                # Create default profile
+            # Check if user_profile exists and has valid data
+            if "user_profile" not in data:
+                self.logger.info("👤 No user_profile key found, creating default profile")
                 default_profile = UserProfile()
                 data["user_profile"] = default_profile.dict()
                 await self.file_repo.save_data(data)
                 self.logger.info("👤 Created default user profile")
                 return default_profile
             
-            return UserProfile(**data["user_profile"])
+            # Check if user_profile is completely empty or None
+            if not data["user_profile"] or data["user_profile"] == {}:
+                self.logger.info("👤 Empty user_profile found, creating default profile")
+                default_profile = UserProfile()
+                data["user_profile"] = default_profile.dict()
+                await self.file_repo.save_data(data)
+                self.logger.info("👤 Created default user profile")
+                return default_profile
+            
+            # Check if it has the basic required fields to ensure it's not corrupted
+            profile_data = data["user_profile"]
+            required_fields = ["id", "username", "overall_score", "earned_coupons"]
+            missing_fields = [field for field in required_fields if field not in profile_data]
+            
+            if missing_fields:
+                self.logger.warning(f"👤 User profile missing required fields: {missing_fields}")
+                self.logger.warning("👤 This might indicate data corruption, but preserving existing data")
+                # Don't create a new profile, try to use what we have
+                # Add missing fields with defaults
+                if "id" not in profile_data:
+                    profile_data["id"] = str(uuid4())
+                if "username" not in profile_data:
+                    profile_data["username"] = "default_user"
+                if "overall_score" not in profile_data:
+                    profile_data["overall_score"] = 0
+                if "earned_coupons" not in profile_data:
+                    profile_data["earned_coupons"] = []
+                
+                # Save the repaired profile
+                data["user_profile"] = profile_data
+                await self.file_repo.save_data(data)
+                self.logger.info("👤 Repaired user profile with missing fields")
+            
+            # Log current profile stats for debugging
+            self.logger.debug(f"👤 Loading user profile: score={profile_data.get('overall_score', 0)}, "
+                            f"coupons={len(profile_data.get('earned_coupons', []))}, "
+                            f"mystery_boxes={profile_data.get('mystery_boxes_earned', 0)}")
+            
+            return UserProfile(**profile_data)
             
         except Exception as e:
             self.logger.error(f"❌ Error getting user profile: {e}")
+            # Don't create a new profile on error, just raise the exception
             raise
     
     async def ensure_default_profile(self) -> UserProfile:
