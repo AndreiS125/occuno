@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from core.config import settings
 from domain.models import (
     UserProfile, ObjectiveStatus, CouponType, CouponDefinition, 
-    EarnedCoupon, MysteryBoxReward, AchievementDefinition
+    EarnedCoupon, MysteryBoxReward, AchievementDefinition,
+    ObjectiveType, UserAchievement
 )
 from repositories.user_profile_repository import UserProfileRepository
 from repositories.objective_repository import ObjectiveRepository
@@ -234,62 +235,106 @@ class GamificationService:
         
         return random.choice(weighted_coupons)
     
+    def _map_to_backend_coupon_type(self, frontend_coupon_type: str) -> CouponType:
+        """Map frontend coupon types to existing backend CouponType enum values."""
+        # Direct mappings for frontend types that match backend types
+        direct_mappings = {
+            "watch_youtube": CouponType.WATCH_YOUTUBE,
+            "scroll_instagram": CouponType.SCROLL_INSTAGRAM,
+            "play_games": CouponType.PLAY_GAMES,
+            "take_nap": CouponType.TAKE_NAP,
+            "power_nap": CouponType.TAKE_NAP,
+            "eat_snack": CouponType.EAT_SNACK,
+            "snack_break": CouponType.EAT_SNACK,
+            "browse_reddit": CouponType.BROWSE_REDDIT,
+            "listen_music": CouponType.LISTEN_MUSIC,
+            "chat_friends": CouponType.CHAT_FRIENDS,
+        }
+        
+        # Check for direct mapping first
+        if frontend_coupon_type in direct_mappings:
+            return direct_mappings[frontend_coupon_type]
+        
+        # Intelligent mappings for new frontend types
+        intelligent_mappings = {
+            # Gaming related
+            "game_marathon": CouponType.PLAY_GAMES,
+            "retro_gaming": CouponType.PLAY_GAMES,
+            
+            # Entertainment related  
+            "movie_marathon": CouponType.WATCH_NETFLIX,
+            "watch_netflix": CouponType.WATCH_NETFLIX,
+            
+            # Social/Media related
+            "social_media": CouponType.SCROLL_INSTAGRAM,
+            "music_session": CouponType.LISTEN_MUSIC,
+            "one_song": CouponType.LISTEN_MUSIC,
+            
+            # Food related
+            "food_festival": CouponType.EAT_SNACK,
+            "coffee_break": CouponType.EAT_SNACK,
+            
+            # Relaxation related
+            "mini_meditation": CouponType.TAKE_NAP,
+            "short_walk": CouponType.TAKE_NAP,
+            
+            # Reading/Learning
+            "quick_read": CouponType.BROWSE_REDDIT,
+            "check_email": CouponType.BROWSE_REDDIT,
+            
+            # Creative
+            "creative_time": CouponType.LISTEN_MUSIC,
+        }
+        
+        if frontend_coupon_type in intelligent_mappings:
+            return intelligent_mappings[frontend_coupon_type]
+        
+        # Fallback to most common coupon type for unknown types
+        logging.warning(f"Unknown frontend coupon type: {frontend_coupon_type}, falling back to SCROLL_INSTAGRAM")
+        return CouponType.SCROLL_INSTAGRAM
+    
     async def process_task_completion(self, task_id: UUID) -> Dict[str, Any]:
-        """Process task completion with coupon rewards instead of XP."""
+        """Process task completion with XP rewards only (no coupons)."""
         task = await self.objective_repo.get_by_id(task_id)
         if not task or task.status != ObjectiveStatus.COMPLETED:
             return {"success": False, "message": "Task not found or not completed"}
         
         user_profile = await self.user_repo.ensure_default_profile()
         
-        # === COUPON EARNING LOGIC ===
-        coupons_earned = []
-        base_points = settings.points_per_task
+        # === XP CALCULATION FOR TASKS ===
+        base_xp = settings.points_per_task if hasattr(settings, 'points_per_task') else 25
         
-        # Base coupon earning (50% chance for common tasks)
-        if random.random() < 0.5:
-            coupon_type = self._get_random_coupon_type()
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
+        # Calculate XP bonuses
+        complexity_bonus = int(base_xp * task.complexity_score * 0.5)  # 50% of objective bonus
+        priority_bonus = int(base_xp * task.priority_score * 0.5)
         
-        # Bonus coupon chances based on task properties
-        bonus_roll = random.random()
-        bonus_message = ""
+        # Timeliness bonus for tasks
+        timeliness_xp_bonus = 0
+        if task.due_date:
+            now = datetime.utcnow().replace(tzinfo=task.due_date.tzinfo) if task.due_date.tzinfo else datetime.utcnow()
+            task_due = task.due_date.replace(tzinfo=None) if task.due_date.tzinfo else task.due_date
+            now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+            
+            days_early = (task_due - now_naive).days
+            if days_early > 0:
+                timeliness_xp_bonus = min(days_early * 10, base_xp // 2)  # Up to 50% bonus for early completion
         
-        if bonus_roll < 0.01:  # 1% - JACKPOT! Multiple coupons
-            bonus_coupons = random.randint(2, 4)
-            for _ in range(bonus_coupons):
-                coupon_type = self._get_random_coupon_type(rarity_boost=2.0)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
-            bonus_message = f"🎰 JACKPOT! {bonus_coupons + 1} coupons earned!"
-        elif bonus_roll < 0.05:  # 5% - Big Win
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.5)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            bonus_message = "💎 BONUS COUPON! Extra reward!"
-        elif bonus_roll < 0.25:  # 25% - Nice bonus
-            if random.random() < 0.7:  # 70% chance for extra coupon
-                coupon_type = self._get_random_coupon_type()
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
-                bonus_message = "⭐ EXTRA COUPON!"
+        # Calculate total XP for task
+        total_task_xp = int(base_xp + complexity_bonus + priority_bonus + timeliness_xp_bonus)
         
-        # === COMPLEXITY AND PRIORITY BONUSES ===
-        if task.complexity_score > 0.7:
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.3)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            bonus_message += " 🧠 Complex task bonus!"
+        # Apply streak multiplier
+        if user_profile.current_streak_days >= 7:
+            streak_multiplier = 1.0 + (user_profile.current_streak_days * 0.02)  # 2% per day for tasks
+            total_task_xp = int(total_task_xp * streak_multiplier)
         
-        if task.priority_score > 0.8:
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.2)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            bonus_message += " 🎯 Priority task bonus!"
+        # === AWARD XP AND HANDLE LEVEL-UPS ===
+        old_level = user_profile.level
+        levels_gained = user_profile.add_experience(total_task_xp)
         
-        # === TIMELINESS BONUS ===
-        timeliness_bonus = False
+        # === NO COUPON EARNING - ONLY XP ===
+        # Coupons are only earned through mystery boxes from leveling up
+        
+        # === TIMELINESS TRACKING ===
         urgency_message = ""
         if task.due_date:
             now = datetime.utcnow().replace(tzinfo=task.due_date.tzinfo) if task.due_date.tzinfo else datetime.utcnow()
@@ -298,31 +343,14 @@ class GamificationService:
             
             days_early = (task_due - now_naive).days
             if days_early > 0:
-                timeliness_bonus = True
-                coupon_type = self._get_random_coupon_type(rarity_boost=1.5)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
-                urgency_message = f"⚡ Early completion bonus coupon!"
+                urgency_message = f"⚡ Early completion bonus: +{timeliness_xp_bonus} XP!"
                 task.completion_timeliness_score = 1.0
             elif days_early < 0:  # Late but still completed
                 urgency_message = "⚠️ Late completion, but good job not giving up!"
                 task.completion_timeliness_score = -0.5
         
-        # === STREAK MULTIPLIER ===
-        streak_multiplier = 1.0 + (user_profile.current_streak_days * 0.1)
-        if user_profile.current_streak_days >= 7:
-            # Extra coupon for week+ streaks
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.8)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            bonus_message += " 🔥 Streak bonus coupon!"
-        
-        # === ADD COUPONS TO USER PROFILE ===
-        for coupon in coupons_earned:
-            user_profile.earned_coupons.append(coupon)
-            user_profile.total_coupons_earned += 1
-        
-        # === MYSTERY BOX PROGRESS ===
+        # === LEGACY MYSTERY BOX PROGRESS (Keep for compatibility) ===
+        base_points = settings.points_per_task if hasattr(settings, 'points_per_task') else 25
         user_profile.mystery_box_progress += base_points
         mystery_box_earned = False
         
@@ -337,23 +365,16 @@ class GamificationService:
         user_profile.daily_tasks_completed_today += 1
         daily_goal_progress = user_profile.daily_tasks_completed_today / user_profile.daily_task_goal
         
-        # === COMEBACK BONUS ===
-        comeback_bonus = False
-        if user_profile.comeback_bonus_available:
-            coupon_type = self._get_random_coupon_type(rarity_boost=2.0)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            user_profile.earned_coupons.append(coupon)
-            user_profile.total_coupons_earned += 1
-            user_profile.comeback_bonus_available = False
-            comeback_bonus = True
-            bonus_message += " 💪 Comeback bonus coupon!"
-        
         # Update score for points-based systems
         user_profile.overall_score += base_points
         
         # === ACHIEVEMENT CHECKING ===
         unlocked_achievements = await self._check_achievements(user_profile)
+        
+        # Add achievement XP bonus
+        achievement_xp = len(unlocked_achievements) * 50
+        if achievement_xp > 0:
+            user_profile.add_experience(achievement_xp)
         
         # === STREAK UPDATE ===
         streak_result = await self._update_streak_system(user_profile)
@@ -367,28 +388,32 @@ class GamificationService:
         # Save updated profile
         await self.user_repo.save_profile(user_profile)
         
-        # === RESPONSE ===
-        coupon_descriptions = []
-        for coupon in coupons_earned:
-            coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
-            if coupon_def:
-                coupon_descriptions.append(f"{coupon_def.display_name} ({coupon_def.duration_minutes}min)")
-        
-        response = {
+        # === RESPONSE (XP ONLY) ===
+        return {
             "success": True,
-            "coupons_earned": len(coupons_earned),
-            "coupon_descriptions": coupon_descriptions,
-            "bonus_message": bonus_message,
+            # XP System
+            "xp_earned": total_task_xp,
+            "achievement_xp": achievement_xp,
+            "total_xp_earned": total_task_xp + achievement_xp,
+            "xp_breakdown": {
+                "base_xp": base_xp,
+                "complexity_bonus": complexity_bonus,
+                "priority_bonus": priority_bonus,
+                "timeliness_bonus": timeliness_xp_bonus,
+                "achievement_bonus": achievement_xp
+            },
+            "level_info": {
+                "current_level": user_profile.level,
+                "current_xp": user_profile.experience_points,
+                "xp_to_next_level": user_profile.experience_to_next_level,
+                "levels_gained": levels_gained,
+                "leveled_up": len(levels_gained) > 0
+            },
+            "mystery_boxes_earned": len(levels_gained),  # Boxes from level-up
+            
+            # NO COUPON DATA - Only XP
             "urgency_message": urgency_message,
             "points_awarded": base_points,
-            "breakdown": {
-                "base_coupons": len([c for c in coupons_earned if not timeliness_bonus and not comeback_bonus]),
-                "bonus_coupons": len([c for c in coupons_earned if timeliness_bonus or comeback_bonus]),
-                "streak_multiplier": streak_multiplier,
-                "complexity_bonus": task.complexity_score > 0.7,
-                "priority_bonus": task.priority_score > 0.8,
-                "comeback_bonus": comeback_bonus
-            },
             "current_coupons": len([c for c in user_profile.earned_coupons if not c.is_used]),
             "total_coupons_earned": user_profile.total_coupons_earned,
             "daily_progress": {
@@ -405,10 +430,10 @@ class GamificationService:
             "unlocked_achievements": unlocked_achievements,
             "streak": streak_result,
             "weekly_challenge": weekly_progress,
-            "psychological_hooks": await self._generate_psychological_hooks(user_profile)
+            
+            # Celebration message (XP only)
+            "celebration": f"🎯 TASK COMPLETE! +{total_task_xp} XP earned!"
         }
-        
-        return response
     
     async def _expire_old_coupons(self, user_profile: UserProfile) -> None:
         """Remove expired coupons from user profile."""
@@ -475,26 +500,47 @@ class GamificationService:
         
         user_profile.mystery_boxes_opened += 1
         
-        # Use frontend choice if provided, otherwise use legacy random system
-        if frontend_choice and 'coupon_type' in frontend_choice:
-            # Frontend-controlled wheel result - award EXACTLY the coupon chosen, nothing more
-            chosen_coupon_type_str = frontend_choice['coupon_type']
+        coupons_earned = []
+        reward_type = "COMMON"
+        reward_description = "✨ Common Coupon!"
+        
+        if frontend_choice and frontend_choice.get("coupon_type"):
+            # FRONTEND CHOICE SYSTEM: Use frontend wheel decision
+            choice_type = frontend_choice.get("coupon_type")
+            choice_name = frontend_choice.get("display_name", choice_type.replace('_', ' ').title())
             
-            # Convert string to CouponType enum
-            try:
-                chosen_coupon_type = CouponType(chosen_coupon_type_str)
-            except ValueError:
-                # If invalid coupon type, log error but don't fallback to random
-                logging.error(f"Invalid coupon type from frontend: {chosen_coupon_type_str}")
-                return {"success": False, "message": f"Invalid coupon type: {chosen_coupon_type_str}"}
+            # Handle special case for no reward
+            if choice_type == "no_reward":
+                reward_type = "EMPTY"
+                reward_description = "Empty box! Better luck next time!"
+                coupons_earned = []
+            else:
+                # Create dynamic coupon for any frontend choice
+                # Try to find existing coupon definition first
+                existing_coupon_def = None
+                for coupon_def in self._coupon_definitions:
+                    if coupon_def.coupon_type.value == choice_type:
+                        existing_coupon_def = coupon_def
+                        break
+                
+                if existing_coupon_def:
+                    # Use existing backend coupon type
+                    coupon = self._create_coupon_with_expiration(existing_coupon_def.coupon_type)
+                    display_name = existing_coupon_def.display_name
+                    duration = existing_coupon_def.duration_minutes
+                else:
+                    # Create dynamic coupon for new frontend types
+                    # Map to a reasonable backend type or create generic one
+                    backend_coupon_type = self._map_to_backend_coupon_type(choice_type)
+                    coupon = self._create_coupon_with_expiration(backend_coupon_type)
+                    display_name = choice_name
+                    duration = frontend_choice.get("duration", 30)  # Default 30 min
+                
+                coupons_earned.append(coupon)
+                reward_type = "WHEEL_CHOICE"
+                reward_description = f"🎉 {display_name}!"
             
-            # Create EXACTLY the coupon chosen by the frontend - no bonuses, no extras
-            coupon = self._create_coupon_with_expiration(chosen_coupon_type)
-            coupons_earned = [coupon]
-            
-            # Use frontend display info
-            reward_type = "WHEEL"
-            reward_description = f"🎯 {frontend_choice.get('display_name', 'Wheel Reward')}!"
+            logging.info(f"Mystery box opened with frontend choice: {choice_type} -> {reward_description}")
             
         else:
             # Legacy random system for backwards compatibility
@@ -653,24 +699,21 @@ class GamificationService:
         # Update progress
         user_profile.weekly_challenge_progress += 1
         
-        # Check completion - Award coupon bonus instead of points
+        # Check completion - Award XP bonus instead of coupons
         challenge_completed = user_profile.weekly_challenge_progress >= user_profile.weekly_challenge_target
         if challenge_completed and not user_profile.weekly_challenge_completed:
             user_profile.weekly_challenge_completed = True
-            # Award special coupons for weekly challenge completion
-            bonus_coupons = random.randint(1, 3)
-            for _ in range(bonus_coupons):
-                coupon_type = self._get_random_coupon_type(rarity_boost=1.5)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                user_profile.earned_coupons.append(coupon)
-                user_profile.total_coupons_earned += 1
+            # Award XP for weekly challenge completion instead of coupons
+            bonus_xp = 100  # Weekly challenge completion bonus
+            user_profile.add_experience(bonus_xp)
+            user_profile.overall_score += bonus_xp
         
         # Generate urgency message
         days_left = 7 - datetime.utcnow().weekday()
         progress_pct = (user_profile.weekly_challenge_progress / user_profile.weekly_challenge_target) * 100
         
         if challenge_completed:
-            urgency_message = "🏆 Weekly challenge completed! Bonus coupons earned!"
+            urgency_message = "🏆 Weekly challenge completed! +100 XP earned!"
         elif days_left <= 2 and progress_pct < 80:
             urgency_message = f"⚠️ Only {days_left} days left! You're {user_profile.weekly_challenge_target - user_profile.weekly_challenge_progress} tasks away!"
         elif progress_pct >= 80:
@@ -731,11 +774,9 @@ class GamificationService:
                 user_profile.achievements.append(new_achievement)
                 user_profile.overall_score += achievement_def.points_value
                 
-                # Award bonus coupon for achievement
-                coupon_type = self._get_random_coupon_type(rarity_boost=1.8)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                user_profile.earned_coupons.append(coupon)
-                user_profile.total_coupons_earned += 1
+                # Award XP for achievement instead of coupon
+                achievement_xp_bonus = achievement_def.points_value
+                user_profile.add_experience(achievement_xp_bonus)
                 
                 # Determine rarity message
                 rarity = "Common"
@@ -751,7 +792,7 @@ class GamificationService:
                     "description": achievement_def.description,
                     "points": achievement_def.points_value,
                     "rarity": rarity,
-                    "coupon_earned": True,
+                    "xp_earned": achievement_xp_bonus,
                     "celebration": f"🎉 Achievement Unlocked: {achievement_def.name}!"
                 })
         
@@ -803,7 +844,7 @@ class GamificationService:
         
         # Coupon usage encouragement
         if user_profile.total_coupons_earned > 0 and user_profile.total_coupons_used == 0:
-            hooks.append("🎯 You've earned coupons but haven't used any yet! Treat yourself!")
+            hooks.append("🎯 You've earned coupons from mystery boxes but haven't used any yet! Treat yourself!")
         
         return {
             "engagement_messages": hooks,
@@ -876,7 +917,7 @@ class GamificationService:
         }
 
     async def claim_daily_bonus(self) -> Dict[str, Any]:
-        """Claim daily bonus with coupon rewards instead of XP."""
+        """Claim daily bonus with XP rewards instead of coupons."""
         user_profile = await self.user_repo.ensure_default_profile()
         
         if not user_profile.daily_bonus_available:
@@ -885,42 +926,32 @@ class GamificationService:
                 "message": "Daily bonus already claimed or not available"
             }
         
-        # Daily bonus now awards coupons
-        coupons_earned = []
+        # Daily bonus now awards XP instead of coupons
         roll = random.random()
         
-        if roll < 0.05:  # 5% - Big bonus day! Multiple coupons
-            coupon_count = random.randint(2, 3)
-            for _ in range(coupon_count):
-                coupon_type = self._get_random_coupon_type(rarity_boost=1.5)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
+        if roll < 0.05:  # 5% - Big bonus day! Lots of XP
+            bonus_xp = random.randint(150, 200)
             bonus_type = "BIG"
-            bonus_message = f"🎉 BIG BONUS DAY! {coupon_count} coupons!"
-        elif roll < 0.25:  # 25% - Good bonus - 1 good coupon
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.2)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
+            bonus_message = f"🎉 BIG BONUS DAY! +{bonus_xp} XP!"
+        elif roll < 0.25:  # 25% - Good bonus - medium XP
+            bonus_xp = random.randint(75, 100)
             bonus_type = "GOOD"
-            bonus_message = "⭐ Great bonus coupon!"
-        else:  # 70% - Standard bonus - 1 common coupon
-            coupon_type = self._get_random_coupon_type()
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
+            bonus_message = f"⭐ Great bonus! +{bonus_xp} XP!"
+        else:  # 70% - Standard bonus - small XP
+            bonus_xp = random.randint(25, 50)
             bonus_type = "STANDARD"
-            bonus_message = "✨ Daily bonus coupon!"
+            bonus_message = f"✨ Daily bonus! +{bonus_xp} XP!"
         
-        # Apply consecutive bonus - extra coupons for streaks
+        # Apply consecutive bonus - extra XP for streaks
+        streak_bonus_xp = 0
         if user_profile.consecutive_daily_bonuses >= 3:
-            extra_coupon_type = self._get_random_coupon_type(rarity_boost=1.3)
-            extra_coupon = self._create_coupon_with_expiration(extra_coupon_type)
-            coupons_earned.append(extra_coupon)
-            bonus_message += f" (Streak bonus: +1 coupon!)"
+            streak_bonus_xp = 25
+            bonus_xp += streak_bonus_xp
+            bonus_message += f" (Streak bonus: +{streak_bonus_xp} XP!)"
         
-        # Add coupons to profile
-        for coupon in coupons_earned:
-            user_profile.earned_coupons.append(coupon)
-            user_profile.total_coupons_earned += 1
+        # Award XP
+        user_profile.add_experience(bonus_xp)
+        user_profile.overall_score += bonus_xp
         
         # Update bonus tracking
         user_profile.daily_bonus_available = False
@@ -939,18 +970,11 @@ class GamificationService:
         
         await self.user_repo.save_profile(user_profile)
         
-        # Prepare coupon descriptions
-        coupon_descriptions = []
-        for coupon in coupons_earned:
-            coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
-            if coupon_def:
-                coupon_descriptions.append(f"{coupon_def.display_name} ({coupon_def.duration_minutes}min)")
-        
         return {
             "success": True,
             "bonus_type": bonus_type,
-            "coupons_earned": len(coupons_earned),
-            "coupon_descriptions": coupon_descriptions,
+            "xp_earned": bonus_xp,
+            "streak_bonus_xp": streak_bonus_xp,
             "consecutive_days": user_profile.consecutive_daily_bonuses,
             "message": bonus_message,
             "extra_rewards": extra_rewards,
@@ -958,88 +982,108 @@ class GamificationService:
         }
     
     async def process_objective_completion(self, objective_id: UUID) -> Dict[str, Any]:
-        """Process objective completion with coupon rewards."""
+        """Process objective completion with XP rewards instead of coupons."""
         objective = await self.objective_repo.get_by_id(objective_id)
         if not objective or objective.status != ObjectiveStatus.COMPLETED:
             return {"success": False, "message": "Objective not found or not completed"}
         
         user_profile = await self.user_repo.ensure_default_profile()
         
-        # Objectives award multiple coupons with higher rarity
-        coupons_earned = []
-        base_points = settings.points_per_objective
+        # === XP CALCULATION ===
+        base_xp = settings.points_per_objective if hasattr(settings, 'points_per_objective') else 100
         
-        # Guaranteed coupons for objectives (more valuable than tasks)
-        guaranteed_coupons = random.randint(2, 4)  # 2-4 coupons guaranteed
-        for _ in range(guaranteed_coupons):
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.5)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
+        # Calculate XP bonuses
+        complexity_bonus = int(base_xp * objective.complexity_score)
+        priority_bonus = int(base_xp * objective.priority_score) 
         
-        # Bonus coupon chances for objectives
-        bonus_roll = random.random()
-        bonus_message = ""
+        # Objective type bonus
+        type_bonus = 0
+        if objective.objective_type == ObjectiveType.MAIN_OBJECTIVE:
+            type_bonus = base_xp * 2  # Main objectives give 3x total XP
+        elif objective.objective_type == ObjectiveType.SUB_OBJECTIVE:
+            type_bonus = base_xp * 0.5  # Sub objectives give 1.5x total XP
         
-        if bonus_roll < 0.02:  # 2% - MEGA JACKPOT for objectives!
-            bonus_coupons = random.randint(3, 5)
-            for _ in range(bonus_coupons):
-                coupon_type = self._get_random_coupon_type(rarity_boost=3.0)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
-            bonus_message = f"🎰 MEGA JACKPOT! {bonus_coupons} bonus coupons!"
-        elif bonus_roll < 0.10:  # 10% - Big Win
-            bonus_coupons = random.randint(1, 2)
-            for _ in range(bonus_coupons):
-                coupon_type = self._get_random_coupon_type(rarity_boost=2.0)
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
-            bonus_message = f"💎 OBJECTIVE BONUS! {bonus_coupons} premium coupons!"
-        elif bonus_roll < 0.35:  # 35% - Nice bonus
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.8)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            bonus_message = "⭐ BIG OBJECTIVE BONUS! Extra coupon!"
+        # Timeliness bonus
+        timeliness_bonus = 0
+        timeliness_message = ""
+        if objective.due_date:
+            now = datetime.utcnow().replace(tzinfo=objective.due_date.tzinfo) if objective.due_date.tzinfo else datetime.utcnow()
+            objective_due = objective.due_date.replace(tzinfo=None) if objective.due_date.tzinfo else objective.due_date
+            now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+            
+            days_early = (objective_due - now_naive).days
+            if days_early > 0:
+                timeliness_bonus = min(days_early * 20, base_xp)  # Up to 100% bonus for early completion
+                timeliness_message = f"⚡ Early completion bonus: +{timeliness_bonus} XP!"
+                objective.completion_timeliness_score = 1.0
+            elif days_early < 0:
+                timeliness_message = "⚠️ Late completion, but good job finishing!"
+                objective.completion_timeliness_score = -0.5
         
-        # Complexity bonus
-        if objective.complexity_score > 0.7:
-            coupon_type = self._get_random_coupon_type(rarity_boost=1.6)
-            coupon = self._create_coupon_with_expiration(coupon_type)
-            coupons_earned.append(coupon)
-            bonus_message += " 🧠 Complex objective bonus!"
+        # Calculate total XP
+        total_xp = int(base_xp + complexity_bonus + priority_bonus + type_bonus + timeliness_bonus)
         
-        # Add coupons to profile
-        for coupon in coupons_earned:
-            user_profile.earned_coupons.append(coupon)
-            user_profile.total_coupons_earned += 1
+        # Apply streak multiplier
+        if user_profile.current_streak_days >= 7:
+            streak_multiplier = 1.0 + (user_profile.current_streak_days * 0.05)  # 5% per day
+            total_xp = int(total_xp * streak_multiplier)
         
-        # Update score for points-based systems
-        user_profile.overall_score += base_points
+        # === AWARD XP AND HANDLE LEVEL-UPS ===
+        old_level = user_profile.level
+        levels_gained = user_profile.add_experience(total_xp)
         
-        # Higher chance for mystery box
-        if random.random() < 0.4:  # 40% chance for objectives
-            user_profile.mystery_boxes_earned += 1
-        
-        # Check achievements
+        # Check for achievements
         unlocked_achievements = await self._check_achievements(user_profile)
+        
+        # Add achievement XP bonus
+        achievement_xp = len(unlocked_achievements) * 50
+        if achievement_xp > 0:
+            user_profile.add_experience(achievement_xp)
+        
+        # Update overall score for legacy systems
+        user_profile.overall_score += total_xp
         
         await self.user_repo.save_profile(user_profile)
         
-        # Prepare coupon descriptions
-        coupon_descriptions = []
-        for coupon in coupons_earned:
-            coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
-            if coupon_def:
-                coupon_descriptions.append(f"{coupon_def.display_name} ({coupon_def.duration_minutes}min)")
-        
-        return {
+        # === PREPARE RESPONSE ===
+        response = {
             "success": True,
-            "coupons_earned": len(coupons_earned),
-            "coupon_descriptions": coupon_descriptions,
-            "bonus_message": bonus_message,
-            "celebration": f"🏆 OBJECTIVE COMPLETE! {len(coupons_earned)} coupons earned!",
+            "xp_earned": total_xp,
+            "achievement_xp": achievement_xp,
+            "total_xp_earned": total_xp + achievement_xp,
+            "xp_breakdown": {
+                "base_xp": base_xp,
+                "complexity_bonus": complexity_bonus,
+                "priority_bonus": priority_bonus,
+                "type_bonus": type_bonus,
+                "timeliness_bonus": timeliness_bonus,
+                "achievement_bonus": achievement_xp
+            },
+            "level_info": {
+                "current_level": user_profile.level,
+                "current_xp": user_profile.experience_points,
+                "xp_to_next_level": user_profile.experience_to_next_level,
+                "levels_gained": levels_gained,
+                "leveled_up": len(levels_gained) > 0
+            },
+            "mystery_boxes_earned": len(levels_gained),  # One box per level gained
+            "mystery_boxes_available": user_profile.mystery_boxes_earned - user_profile.mystery_boxes_opened,
             "unlocked_achievements": unlocked_achievements,
-            "mystery_box_chance": True
+            "timeliness_message": timeliness_message,
+            "celebration": f"🏆 OBJECTIVE COMPLETE! +{total_xp} XP earned!"
         }
+        
+        # Add level-up celebration
+        if levels_gained:
+            level_celebrations = []
+            for level in levels_gained:
+                level_celebrations.append(f"🎉 LEVEL UP! You reached level {level}!")
+                level_celebrations.append(f"📦 Mystery Box earned!")
+            
+            response["level_up_celebrations"] = level_celebrations
+            response["celebration"] = f"🎆 LEVEL UP! You reached level {user_profile.level}! +{total_xp} XP earned!"
+        
+        return response
     
     async def get_available_coupons(self) -> Dict[str, Any]:
         """Get user's available coupons with expiration info."""

@@ -247,12 +247,12 @@ export default function UserScore({ className = "" }: UserScoreProps) {
             {mysteryBoxAnimating ? (
               <div className="flex items-center">
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
-                Opening Box...
+                Opening Sphere...
               </div>
             ) : (
               <div className="flex items-center">
                 <Package className="w-3 h-3 mr-2" />
-                Open Mystery Box ({stats.mystery_boxes_available})
+                Touch Mystery Sphere ({stats.mystery_boxes_available})
               </div>
             )}
           </Button>

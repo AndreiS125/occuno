@@ -50,9 +50,20 @@ export default function AchievementsPage() {
 
   useEffect(() => {
     fetchData();
-    // Refresh data every 30 seconds to keep psychological hooks fresh
-    const interval = setInterval(fetchData, 30000);
+    // Set up real-time updates for gamification stats
+    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
+  }, []);
+
+  // Listen for objective completion events to refresh data
+  useEffect(() => {
+    const handleObjectiveUpdate = () => {
+      fetchData();
+    };
+    
+    // Add event listener for objective updates
+    window.addEventListener('objectiveCompleted', handleObjectiveUpdate);
+    return () => window.removeEventListener('objectiveCompleted', handleObjectiveUpdate);
   }, []);
 
   const fetchData = async () => {
@@ -493,7 +504,7 @@ export default function AchievementsPage() {
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Progress</p>
             <p className="text-2xl font-bold text-primary">
-              {Math.round(((userStats?.experience_points || 0) / (userStats?.experience_to_next_level || 100)) * 100)}%
+              {Math.round(((userStats?.progress_to_next_level || 0) * 100))}%
             </p>
           </div>
         </div>
@@ -502,10 +513,26 @@ export default function AchievementsPage() {
             className="bg-gradient-to-r from-primary to-secondary h-3 rounded-full"
             initial={{ width: 0 }}
             animate={{ 
-              width: `${Math.round(((userStats?.experience_points || 0) / (userStats?.experience_to_next_level || 100)) * 100)}%` 
+              width: `${Math.round(((userStats?.progress_to_next_level || 0) * 100))}%` 
             }}
             transition={{ duration: 1, ease: "easeOut" }}
           />
+        </div>
+        
+        {/* XP Progress Details */}
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+          <div className="text-center">
+            <p className="text-muted-foreground">Current XP</p>
+            <p className="font-bold text-primary">{userStats?.experience_points || 0}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-muted-foreground">Next Level</p>
+            <p className="font-bold text-blue-600">{userStats?.experience_to_next_level || 100}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-muted-foreground">Total XP Earned</p>
+            <p className="font-bold text-green-600">{userStats?.total_experience_earned || 0}</p>
+          </div>
         </div>
       </div>
 

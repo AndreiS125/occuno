@@ -27,6 +27,7 @@ import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { userApi } from "@/lib/api";
 import toast from "react-hot-toast";
+import MysteryBoxRealistic from "@/components/ui/mystery-box-realistic";
 
 export default function Home() {
   const { objectives, loading: objectivesLoading } = useObjectives();
@@ -34,6 +35,7 @@ export default function Home() {
   const [dailyStatus, setDailyStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showUrgentActions, setShowUrgentActions] = useState(false);
+  const [showMysteryBox, setShowMysteryBox] = useState(false);
   
   // Refs for animations
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,6 +70,26 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenMysteryBox = async () => {
+    const result = await userApi.openMysteryBox();
+    
+    if (result.success) {
+      // Show celebration
+      if (result.coupons_earned > 0) {
+        toast.success(`🎉 ${result.celebration} - ${result.coupons_earned} coupons earned!`);
+      }
+      // Refresh data
+      setTimeout(fetchGamificationData, 500);
+      return result;
+    } else {
+      throw new Error(result.message || "No mystery boxes available");
+    }
+  };
+
+  const handleCloseMysteryBox = () => {
+    setShowMysteryBox(false);
   };
 
   // GSAP Animations
@@ -244,25 +266,15 @@ export default function Home() {
                   {gamificationStats.mystery_boxes_available} Available
                 </span>
               </div>
-              <h3 className="font-semibold mb-2">Mystery Boxes</h3>
+              <h3 className="font-semibold mb-2">Mystery Spheres</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Open boxes to discover coupon rewards!
+                Touch the sphere to discover coupon rewards!
               </p>
               <Button 
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                onClick={async () => {
-                  try {
-                    const result = await userApi.openMysteryBox();
-                    if (result.success) {
-                      toast.success(`🎁 ${result.reward_description}`, { duration: 4000 });
-                      fetchGamificationData();
-                    }
-                  } catch (error) {
-                    toast.error("Failed to open mystery box");
-                  }
-                }}
+                onClick={() => setShowMysteryBox(true)}
               >
-                Open Mystery Box
+                Touch Mystery Sphere
               </Button>
             </Card>
           )}
@@ -413,6 +425,14 @@ export default function Home() {
           </div>
         </motion.div>
       )}
+
+      {/* Mystery Box Realistic */}
+      <MysteryBoxRealistic 
+        isOpen={showMysteryBox}
+        onOpen={handleOpenMysteryBox}
+        onClose={handleCloseMysteryBox}
+        modelPath="/models/treasure-chest.glb"
+      />
     </div>
   );
 } 

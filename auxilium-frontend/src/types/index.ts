@@ -126,11 +126,19 @@ export interface GamificationStats {
   total_coupons_used: number;
   coupon_usage_rate: number;
   
-  // Mystery Box System
-  mystery_box_progress: number;
-  mystery_box_needed: number;
-  mystery_box_progress_pct: number;
+  // XP/Level System - NEW
+  experience_points: number;
+  level: number;
+  experience_to_next_level: number;
+  total_experience_earned: number;
+  progress_to_next_level: number; // 0.0 to 1.0
+  
+  // Mystery Box System (now level-based)
+  mystery_box_progress: number; // Legacy
+  mystery_box_needed: number;   // Legacy
+  mystery_box_progress_pct: number; // Legacy
   mystery_boxes_available: number;
+  mystery_boxes_from_levelup: number;
   
   // Legacy Score System
   overall_score: number;
