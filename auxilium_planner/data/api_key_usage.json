@@ -2,31 +2,31 @@
   "key_0": {
     "key_id": "key_0",
     "key_suffix": "ozPs",
-    "requests_today": 113,
-    "last_request_time": "2025-07-09T15:51:45.445371",
-    "quota_reset_time": null,
-    "is_exhausted": false,
-    "total_requests": 952,
+    "requests_today": 30,
+    "last_request_time": "2025-07-11T23:33:31.475759",
+    "quota_reset_time": "2025-07-12T23:33:33.747152",
+    "is_exhausted": true,
+    "total_requests": 982,
     "first_used": "2025-07-04T14:51:24.407696"
   },
   "key_1": {
     "key_id": "key_1",
     "key_suffix": "iuJM",
-    "requests_today": 0,
-    "last_request_time": "2025-07-08T14:56:58.948510",
-    "quota_reset_time": null,
-    "is_exhausted": false,
-    "total_requests": 55,
+    "requests_today": 7,
+    "last_request_time": "2025-07-11T23:34:24.455141",
+    "quota_reset_time": "2025-07-12T23:34:26.732477",
+    "is_exhausted": true,
+    "total_requests": 62,
     "first_used": "2025-07-04T15:24:49.836745"
   },
   "key_2": {
     "key_id": "key_2",
     "key_suffix": "pDUo",
-    "requests_today": 0,
-    "last_request_time": "2025-07-08T16:04:47.516274",
+    "requests_today": 5,
+    "last_request_time": "2025-07-11T23:35:40.043613",
     "quota_reset_time": null,
     "is_exhausted": false,
-    "total_requests": 236,
+    "total_requests": 241,
     "first_used": "2025-07-04T14:58:14.189062"
   }
 }

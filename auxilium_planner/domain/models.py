@@ -80,17 +80,27 @@ class UserProfile(BaseModel):
     last_streak_check_date: Optional[datetime] = None
     achievements: List[UserAchievement] = Field(default_factory=list)
     
+    # XP/Level System - NEW
+    experience_points: int = 0
+    level: int = 1
+    experience_to_next_level: int = 100  # XP needed for next level
+    total_experience_earned: int = 0
+    last_level_up_date: Optional[datetime] = None
+    
     # Coupon System (Replaces XP/Level)
     earned_coupons: List[EarnedCoupon] = Field(default_factory=list)
     total_coupons_earned: int = 0
     total_coupons_used: int = 0
     favorite_coupon_types: List[CouponType] = Field(default_factory=list)
     
-    # Mystery Box System (Now awards coupons)
-    mystery_box_progress: int = 0
-    points_per_mystery_box: int = 100  # Increases linearly with each box
+    # Mystery Box System (Now awards on level-up)
     mystery_boxes_earned: int = 0
     mystery_boxes_opened: int = 0
+    mystery_boxes_from_levelup: int = 0  # Track boxes from leveling up
+    
+    # Legacy fields for point-based mystery boxes (keep for compatibility)
+    mystery_box_progress: int = 0
+    points_per_mystery_box: int = 100
     
     # Streak System Enhancement
     longest_streak: int = 0
@@ -142,6 +152,38 @@ class UserProfile(BaseModel):
     
     # Preferences & Patterns
     preferred_work_hours: Optional[Dict[str, Any]] = None
+    completion_patterns: Optional[Dict[str, Any]] = None
+    
+    # Personal Information
+    timezone: str = "UTC"
+    
+    def calculate_xp_for_next_level(self) -> int:
+        """Calculate XP needed for next level based on current level."""
+        # XP requirement increases by 20 each level: 100, 120, 140, 160... up to max 400
+        return min(100 + (self.level - 1) * 20, 400)
+    
+    def add_experience(self, xp: int) -> List[int]:
+        """Add experience points and handle level-ups. Returns list of levels gained."""
+        self.experience_points += xp
+        self.total_experience_earned += xp
+        
+        levels_gained = []
+        
+        # Check for level-ups
+        while self.experience_points >= self.experience_to_next_level:
+            self.experience_points -= self.experience_to_next_level
+            self.level += 1
+            levels_gained.append(self.level)
+            
+            # Update XP requirement for next level
+            self.experience_to_next_level = self.calculate_xp_for_next_level()
+            
+            # Award mystery box on level-up
+            self.mystery_boxes_earned += 1
+            self.mystery_boxes_from_levelup += 1
+            self.last_level_up_date = datetime.utcnow()
+        
+        return levels_gained
 
 # --- Core Objective Models ---
 class RecurringInfo(BaseModel):

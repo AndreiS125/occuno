@@ -85,13 +85,21 @@ class EnhancedGamificationStatsResponse(BaseModel):
     total_coupons_used: int
     coupon_usage_rate: float
     
-    # Mystery box system
-    mystery_box_progress: int
-    mystery_box_needed: int
-    mystery_box_progress_pct: float
+    # XP/Level system - NEW
+    experience_points: int
+    level: int
+    experience_to_next_level: int
+    total_experience_earned: int
+    progress_to_next_level: float  # 0.0 to 1.0
+    
+    # Mystery box system (now level-based)
+    mystery_box_progress: int  # Legacy
+    mystery_box_needed: int    # Legacy
+    mystery_box_progress_pct: float  # Legacy
     mystery_boxes_earned: int
     mystery_boxes_opened: int
     mystery_boxes_available: int
+    mystery_boxes_from_levelup: int
     
     # Legacy score tracking
     overall_score: int
@@ -208,31 +216,32 @@ async def get_enhanced_gamification_stats(
     """Get comprehensive gamification statistics with coupon system."""
     profile = await user_repo.ensure_default_profile()
     
-    # Calculate coupon usage rate
-    coupon_usage_rate = 0.0
-    if profile.total_coupons_earned > 0:
-        coupon_usage_rate = profile.total_coupons_used / profile.total_coupons_earned
-    
-    # Calculate mystery box progress
-    mystery_box_progress_pct = 0.0
-    if profile.points_per_mystery_box > 0:
-        mystery_box_progress_pct = (profile.mystery_box_progress / profile.points_per_mystery_box) * 100
-    
-    # Current active coupons
+    # Calculate additional stats
     current_coupons = len([c for c in profile.earned_coupons if not c.is_used])
+    coupon_usage_rate = profile.total_coupons_used / max(profile.total_coupons_earned, 1)
+    mystery_box_progress_pct = (profile.mystery_box_progress / profile.points_per_mystery_box) * 100
     
-    # Recent achievements
-    recent_achievements = [
-        {
-            "achievement_id": str(ach.achievement_id),
-            "unlocked_at": ach.unlocked_at.isoformat()
-        }
-        for ach in sorted(
-            profile.achievements, 
-            key=lambda x: x.unlocked_at, 
-            reverse=True
-        )[:5]  # Last 5 achievements
-    ]
+    # Calculate XP progress percentage
+    progress_to_next_level = profile.experience_points / profile.experience_to_next_level if profile.experience_to_next_level > 0 else 0.0
+    
+    # Get recent achievements
+    gamification = GamificationService()
+    achievement_definitions = gamification._load_achievement_definitions()
+    
+    recent_achievements = []
+    for achievement in profile.achievements[-5:]:  # Last 5 achievements
+        # Find the achievement definition to get name and points
+        achievement_def = next(
+            (ad for ad in achievement_definitions if ad.id == achievement.achievement_id), 
+            None
+        )
+        if achievement_def:
+            recent_achievements.append({
+                "id": achievement.achievement_id,
+                "name": achievement_def.name,
+                "unlocked_at": achievement.unlocked_at.isoformat(),
+                "points_value": achievement_def.points_value
+            })
     
     return EnhancedGamificationStatsResponse(
         # Core coupon stats
@@ -241,13 +250,21 @@ async def get_enhanced_gamification_stats(
         total_coupons_used=profile.total_coupons_used,
         coupon_usage_rate=coupon_usage_rate,
         
-        # Mystery box system
+        # XP/Level system - NEW
+        experience_points=profile.experience_points,
+        level=profile.level,
+        experience_to_next_level=profile.experience_to_next_level,
+        total_experience_earned=profile.total_experience_earned,
+        progress_to_next_level=progress_to_next_level,
+        
+        # Mystery box system (now level-based)
         mystery_box_progress=profile.mystery_box_progress,
         mystery_box_needed=profile.points_per_mystery_box,
         mystery_box_progress_pct=mystery_box_progress_pct,
         mystery_boxes_earned=profile.mystery_boxes_earned,
         mystery_boxes_opened=profile.mystery_boxes_opened,
         mystery_boxes_available=profile.mystery_boxes_earned - profile.mystery_boxes_opened,
+        mystery_boxes_from_levelup=profile.mystery_boxes_from_levelup,
         
         # Legacy score tracking
         overall_score=profile.overall_score,

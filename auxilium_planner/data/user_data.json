@@ -1,77 +1,26 @@
 {
   "user_profile": {
-    "id": "00147ee5-3bd7-4dce-837b-b9b5812dee7f",
+    "id": "5c1a6b01-8bb6-4df2-bc00-c981720b310b",
     "username": "default_user",
-    "created_at": "2025-07-11T23:56:21.893033",
+    "created_at": "2025-07-12T19:43:37.320415",
     "overall_score": 0,
     "current_streak_days": 0,
-    "last_streak_check_date": "2025-07-11T23:56:21.896731",
+    "last_streak_check_date": null,
     "achievements": [],
-    "earned_coupons": [
-      {
-        "id": "bd304831-a49b-400f-997a-3b2d345bba26",
-        "coupon_type": "listen_music",
-        "earned_at": "2025-07-12T00:02:36.526045",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      },
-      {
-        "id": "d2834472-07d4-4c50-9d01-dedda3e7e270",
-        "coupon_type": "watch_netflix",
-        "earned_at": "2025-07-12T00:03:24.680408",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      },
-      {
-        "id": "279e5b67-c0b3-4beb-a814-04c3338eae5e",
-        "coupon_type": "browse_reddit",
-        "earned_at": "2025-07-12T00:07:42.508482",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      },
-      {
-        "id": "e24400fe-bc41-4b7c-a1e4-ea3ad69f6bbe",
-        "coupon_type": "listen_music",
-        "earned_at": "2025-07-12T00:07:42.508727",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      },
-      {
-        "id": "169b1f0d-c38e-4b83-8297-a240915fae12",
-        "coupon_type": "chat_friends",
-        "earned_at": "2025-07-12T00:14:16.615525",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      },
-      {
-        "id": "211385f8-61f4-499a-8d34-ffdb415169d1",
-        "coupon_type": "listen_music",
-        "earned_at": "2025-07-12T00:52:36.748566",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      },
-      {
-        "id": "fe768869-e267-4928-baf8-b4c11bf2b170",
-        "coupon_type": "browse_reddit",
-        "earned_at": "2025-07-12T00:52:56.135949",
-        "expires_at": "2025-07-12T23:59:59.999999",
-        "used_at": null,
-        "is_used": false
-      }
-    ],
-    "total_coupons_earned": 7,
+    "experience_points": 0,
+    "level": 1,
+    "experience_to_next_level": 100,
+    "total_experience_earned": 0,
+    "last_level_up_date": null,
+    "earned_coupons": [],
+    "total_coupons_earned": 0,
     "total_coupons_used": 0,
     "favorite_coupon_types": [],
+    "mystery_boxes_earned": 0,
+    "mystery_boxes_opened": 0,
+    "mystery_boxes_from_levelup": 0,
     "mystery_box_progress": 0,
     "points_per_mystery_box": 100,
-    "mystery_boxes_earned": 110,
-    "mystery_boxes_opened": 6,
     "longest_streak": 0,
     "streak_multiplier": 1.0,
     "streak_insurance_count": 0,
@@ -90,7 +39,7 @@
     "daily_task_goal": 3,
     "weekly_tasks_completed": 0,
     "monthly_tasks_completed": 0,
-    "rank_this_week": 2,
+    "rank_this_week": 1,
     "rank_last_week": 1,
     "seasonal_rank": 1,
     "competitive_season": 1,
@@ -104,6 +53,8 @@
     "last_major_achievement": null,
     "days_since_last_activity": 0,
     "progress_decay_warning": false,
-    "preferred_work_hours": null
+    "preferred_work_hours": null,
+    "completion_patterns": null,
+    "timezone": "UTC"
   }
 }

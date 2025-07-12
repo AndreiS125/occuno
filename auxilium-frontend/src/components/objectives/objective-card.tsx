@@ -100,52 +100,158 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
         
         // Extract gamification data from backend response
         const gamificationResult = result.gamification;
-        const actualCoupons = gamificationResult?.coupon_descriptions || calculateExpectedCoupons(objective);
-        const multiplier = gamificationResult?.breakdown?.bonus_multiplier || 1;
         const achievements = gamificationResult?.unlocked_achievements || [];
         
-        // Determine tier based on backend response
-        let tier: 'basic' | 'streak' | 'milestone' | 'jackpot' | 'legendary' = 'basic';
-        if (achievements.length > 0) tier = 'jackpot';
-        else if (multiplier >= 5) tier = 'jackpot';
-        else if (multiplier >= 2 || actualCoupons.length >= 3) tier = 'milestone';
-        else if (objective.priority_score >= 0.8) tier = 'streak';
-        
-        setRewardCoupons(actualCoupons);
-        setRewardMultiplier(multiplier);
-        setRewardType(tier);
-        setAchievementUnlocked(achievements.length > 0);
-        setRewardTrigger(true);
-        
-        // Show backend-provided messages
-        const bonusMessage = gamificationResult?.bonus_message;
-        const celebrationMessage = gamificationResult?.celebration;
-        const mysteryBoxEarned = gamificationResult?.mystery_box_progress?.earned;
-        
-        let toastMessage = `🎫 ${actualCoupons.length} coupon${actualCoupons.length > 1 ? 's' : ''} earned!`;
-        if (celebrationMessage) toastMessage = `🎉 ${celebrationMessage}`;
-        else if (bonusMessage) toastMessage = `✨ ${bonusMessage}`;
-        
-        toast.success(toastMessage);
-        
-        // Show mystery box notification if earned
-        if (mysteryBoxEarned) {
-          setTimeout(() => {
-            toast.success("✨ Mystery Box earned! Check your gamification dashboard!", { 
-              duration: 6000,
-              icon: '📦'
-            });
-          }, 1000);
-        }
-        
-        // Show achievement notification
-        if (achievements.length > 0) {
-          setTimeout(() => {
-            toast.success(`🏆 Achievement unlocked: ${achievements[0].name}!`, { 
-              duration: 6000,
-              icon: '🏆'
-            });
-          }, 1500);
+        if (objective.objective_type === ObjectiveType.TASK) {
+          // Tasks now use XP-only system (like objectives)
+          const xpEarned = gamificationResult?.xp_earned || 0;
+          const totalXp = gamificationResult?.total_xp_earned || xpEarned;
+          const levelInfo = gamificationResult?.level_info || {};
+          const leveledUp = levelInfo.leveled_up || false;
+          const mysteryBoxesEarned = gamificationResult?.mystery_boxes_earned || 0;
+          
+          // Determine tier based on XP and level-ups (no coupons)
+          let tier: 'basic' | 'streak' | 'milestone' | 'jackpot' | 'legendary' = 'basic';
+          if (leveledUp || achievements.length > 0) tier = 'jackpot';
+          else if (totalXp >= 50) tier = 'milestone';
+          else if (objective.priority_score >= 0.8) tier = 'streak';
+          
+          // Set up animations for tasks (XP-only system)
+          const rewardStrings = [`+${totalXp} XP`];
+          if (leveledUp) rewardStrings.push(`Level ${levelInfo.current_level}!`);
+          if (mysteryBoxesEarned > 0) rewardStrings.push(`${mysteryBoxesEarned} Mystery Box${mysteryBoxesEarned > 1 ? 'es' : ''}!`);
+          
+          setRewardCoupons(rewardStrings);
+          setRewardMultiplier(leveledUp ? 5 : (totalXp >= 50 ? 2 : 1));
+          setRewardType(tier);
+          setAchievementUnlocked(achievements.length > 0 || leveledUp);
+          setRewardTrigger(true);
+          
+          // Show notifications (XP only)
+          const bonusMessage = gamificationResult?.bonus_message;
+          const celebrationMessage = gamificationResult?.celebration;
+          
+          let toastMessage = `🎯 +${totalXp} XP earned!`;
+          if (celebrationMessage) toastMessage = `🎉 ${celebrationMessage}`;
+          else if (bonusMessage) toastMessage = `✨ ${bonusMessage}`;
+          
+          toast.success(toastMessage, { duration: 4000 });
+          
+          // Show level-up notifications
+          if (leveledUp && levelInfo.levels_gained?.length > 0) {
+            setTimeout(() => {
+              toast.success(`🎆 LEVEL UP! You reached level ${levelInfo.current_level}!`, { 
+                duration: 6000,
+                icon: '📈'
+              });
+            }, 1000);
+            
+            if (mysteryBoxesEarned > 0) {
+              setTimeout(() => {
+                const boxText = mysteryBoxesEarned === 1 ? 'Mystery Box' : `${mysteryBoxesEarned} Mystery Boxes`;
+                toast.success(`📦 ${boxText} earned from leveling up!`, { 
+                  duration: 6000,
+                  icon: '📦'
+                });
+              }, 2000);
+            }
+          }
+          
+          // Show achievement notifications
+          if (achievements.length > 0) {
+            setTimeout(() => {
+              toast.success(`🏆 Achievement unlocked: ${achievements[0].name}! (+50 XP)`, { 
+                duration: 6000,
+                icon: '🏆'
+              });
+            }, leveledUp ? 3000 : 1500);
+          }
+          
+        } else {
+          // Objectives use the NEW XP-only system (NO COUPONS)
+          const xpEarned = gamificationResult?.xp_earned || 0;
+          const totalXp = gamificationResult?.total_xp_earned || xpEarned;
+          const levelInfo = gamificationResult?.level_info || {};
+          const leveledUp = levelInfo.leveled_up || false;
+          const mysteryBoxesEarned = gamificationResult?.mystery_boxes_earned || 0;
+          
+          // Determine tier based on XP and level-ups
+          let tier: 'basic' | 'streak' | 'milestone' | 'jackpot' | 'legendary' = 'basic';
+          if (leveledUp || achievements.length > 0) tier = 'legendary';
+          else if (totalXp >= 200) tier = 'jackpot';
+          else if (totalXp >= 100) tier = 'milestone';
+          else if (objective.priority_score >= 0.8) tier = 'streak';
+          
+          // Set up animations for objectives (XP-only system - NO COUPONS)
+          const rewardStrings = [`+${totalXp} XP`];
+          if (leveledUp) rewardStrings.push(`Level ${levelInfo.current_level}!`);
+          if (mysteryBoxesEarned > 0) rewardStrings.push(`${mysteryBoxesEarned} Mystery Box${mysteryBoxesEarned > 1 ? 'es' : ''}!`);
+          
+          setRewardCoupons(rewardStrings);
+          setRewardMultiplier(leveledUp ? 10 : (totalXp >= 200 ? 5 : (totalXp >= 100 ? 2 : 1)));
+          setRewardType(tier);
+          setAchievementUnlocked(achievements.length > 0 || leveledUp);
+          setRewardTrigger(true);
+          
+          // Show notifications
+          const bonusMessage = gamificationResult?.bonus_message;
+          const celebrationMessage = gamificationResult?.celebration;
+          
+          let toastMessage = `🎯 +${totalXp} XP earned!`;
+          if (celebrationMessage) toastMessage = `🎉 ${celebrationMessage}`;
+          else if (bonusMessage) toastMessage = `✨ ${bonusMessage}`;
+          
+          toast.success(toastMessage, { duration: 4000 });
+          
+          // Show level-up notifications
+          if (leveledUp && levelInfo.levels_gained?.length > 0) {
+            setTimeout(() => {
+              toast.success(`🎆 LEVEL UP! You reached level ${levelInfo.current_level}!`, { 
+                duration: 6000,
+                icon: '📈'
+              });
+            }, 1000);
+            
+            // Show mystery box notifications for level-ups
+            if (mysteryBoxesEarned > 0) {
+              setTimeout(() => {
+                const boxText = mysteryBoxesEarned === 1 ? 'Mystery Box' : `${mysteryBoxesEarned} Mystery Boxes`;
+                toast.success(`📦 ${boxText} earned from leveling up!`, { 
+                  duration: 6000,
+                  icon: '📦'
+                });
+              }, 2000);
+            }
+          }
+          
+          // Show achievement notifications
+          if (achievements.length > 0) {
+            setTimeout(() => {
+              toast.success(`🏆 Achievement unlocked: ${achievements[0].name}! (+50 XP)`, { 
+                duration: 6000,
+                icon: '🏆'
+              });
+            }, leveledUp ? 3000 : 1500);
+          }
+          
+          // Show XP breakdown for complex rewards
+          if (gamificationResult?.xp_breakdown) {
+            const breakdown = gamificationResult.xp_breakdown;
+            const details: string[] = [];
+            if (breakdown.complexity_bonus > 0) details.push(`Complexity: +${breakdown.complexity_bonus}`);
+            if (breakdown.priority_bonus > 0) details.push(`Priority: +${breakdown.priority_bonus}`);
+            if (breakdown.type_bonus > 0) details.push(`Type: +${breakdown.type_bonus}`);
+            if (breakdown.timeliness_bonus > 0) details.push(`Early: +${breakdown.timeliness_bonus}`);
+            
+            if (details.length > 0) {
+              setTimeout(() => {
+                toast.success(`💡 XP Breakdown: ${details.join(', ')}`, { 
+                  duration: 5000,
+                  icon: '📊'
+                });
+              }, leveledUp ? 4000 : 2500);
+            }
+          }
         }
       } else {
         // For other status changes, use regular update
@@ -153,6 +259,11 @@ export default function ObjectiveCard({ objective, onUpdate, className = "" }: O
           status: newStatus,
           completion_percentage: objective.completion_percentage
         });
+      }
+      
+      // Dispatch event for real-time updates
+      if (newStatus === ObjectiveStatus.COMPLETED) {
+        window.dispatchEvent(new CustomEvent('objectiveCompleted'));
       }
       
       onUpdate?.();
