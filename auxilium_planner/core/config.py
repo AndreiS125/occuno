@@ -48,12 +48,14 @@ class Settings(BaseSettings):
     retry_attempts: int = Field(default=3, env="RETRY_ATTEMPTS")
     backoff_factor: float = Field(default=2.0, env="BACKOFF_FACTOR")
     
+    # Gamification settings
+    points_per_task: int = Field(default=25, env="POINTS_PER_TASK")
+    points_per_objective: int = Field(default=100, env="POINTS_PER_OBJECTIVE")
+    
     # Memory and data retention
     memory_retention_days: int = Field(default=30, env="MEMORY_RETENTION_DAYS")
     
     # Gamification settings
-    points_per_task: int = 10
-    points_per_objective: int = 50
     streak_threshold_hours: int = 24
     
     @validator('google_api_keys', pre=True)

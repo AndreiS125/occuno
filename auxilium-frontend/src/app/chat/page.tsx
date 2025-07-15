@@ -123,6 +123,7 @@ interface AgentResponseEvent {
 interface ExecutionData {
   id: string;
   threadId: string;
+  exchangeId: string;
   userMessage: string;
   timestamp: string;
   isComplete: boolean;
@@ -232,6 +233,187 @@ const ChatPage: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [selectedAgent, setSelectedAgent] = useState<'multi' | 'single'>('multi');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  
+  // Edit message state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState('');
+  
+  // Stop execution state
+  const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null);
+
+  // Edit message function
+  const editMessage = useCallback(async (threadId: string, exchangeId: string, newMessage: string) => {
+    try {
+      console.log('✏️ Editing message:', { threadId, exchangeId, newMessage });
+      
+      if (!exchangeId) {
+        console.error('❌ No exchange ID provided for editing');
+        throw new Error('No exchange ID provided for editing');
+      }
+      
+      const response = await fetch('http://localhost:8000/api/v1/agent/edit-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          thread_id: threadId,
+          exchange_id: exchangeId,
+          new_message: newMessage,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to edit message: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Message edited successfully:', data);
+      
+      // Don't clear executions here - let the rerun handle it
+      // The rerun will show the new conversation properly
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error editing message:', error);
+      throw error;
+    }
+  }, []);
+
+  // Re-run from message function
+  const rerunFromMessage = useCallback(async (threadId: string, userMessage: string) => {
+    try {
+      console.log('🔄 Re-running from message:', threadId, 'with message:', userMessage);
+      
+      // Choose endpoint based on selected agent
+      const endpoint = selectedAgent === 'single' 
+        ? 'http://localhost:8000/api/v1/agent/rerun-from-message/single/stream'
+        : 'http://localhost:8000/api/v1/agent/rerun-from-message/stream';
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          thread_id: threadId,
+          include_thoughts: true,
+          include_tool_details: true
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to rerun from message: ${response.status}`);
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+      
+      setIsStreaming(true);
+      setCurrentPhase('Re-running...');
+      
+      // Clear executions and create new one for rerun
+      setExecutions([]);
+      
+      // Create new execution for rerun
+      const newExecution: ExecutionData = {
+        id: `rerun-${Date.now()}`,
+        threadId: threadId,
+        exchangeId: '', // Will be set when we get the exchange_id from backend
+        userMessage: userMessage,
+        timestamp: new Date().toISOString(),
+        isComplete: false,
+        currentPhase: 'Re-running...',
+        finalResponse: '',
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalCost: 0,
+        toolCalls: [],
+        toolResults: [],
+        toolCallMap: new Map(),
+        agentResponses: [],
+        thinkingContent: []
+      };
+      
+      setExecutions([newExecution]);
+      setCurrentExecutionId(newExecution.id);
+      
+      // Process streaming response
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const eventData = JSON.parse(line.slice(6));
+              await updateExecutionWithEvent(eventData);
+            } catch (error) {
+              console.error('❌ Error parsing SSE event:', error);
+            }
+          }
+        }
+      }
+      
+      setIsStreaming(false);
+      setCurrentPhase('Ready');
+      
+    } catch (error) {
+      console.error('❌ Error re-running from message:', error);
+      setCurrentPhase('Error');
+      setIsStreaming(false);
+      setCurrentExecutionId(null);
+      
+      // If rerun fails, we should reload the conversation to show the truncated history
+      window.location.reload();
+    }
+  }, [selectedAgent]);
+
+  // Stop execution function
+  const stopExecution = useCallback(async (executionId: string) => {
+    try {
+      console.log('🛑 Stopping execution:', executionId);
+      
+      const response = await fetch('http://localhost:8000/api/v1/agent/stop-execution', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          execution_id: executionId,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Failed to stop execution: ${response.status}`);
+      }
+      
+      if (data.success) {
+        console.log('✅ Execution stopped successfully:', data);
+        setCurrentExecutionId(null);
+        setIsStreaming(false);
+        setCurrentPhase('Stopped');
+      } else {
+        console.log('⚠️ Execution stop failed:', data.message);
+        setCurrentPhase('Stop failed');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error stopping execution:', error);
+      throw error;
+    }
+  }, []);
 
   // Load conversation history from backend
   const loadConversationHistory = useCallback(async () => {
@@ -375,6 +557,7 @@ const ChatPage: React.FC = () => {
       const execution: ExecutionData = {
         id: `stored-${exchange.id}`,
         threadId: threadId,
+        exchangeId: exchange.id,
         userMessage: exchange.user_message,
         timestamp: exchange.timestamp,
         isComplete: exchange.is_complete || false,
@@ -556,6 +739,7 @@ const ChatPage: React.FC = () => {
       const newExecution: ExecutionData = {
         id: `execution-${Date.now()}`,
         threadId: currentThreadId || 'new',
+        exchangeId: '', // Will be set when we get the exchange_id from backend
         userMessage,
         timestamp: new Date().toISOString(),
         isComplete: false,
@@ -573,6 +757,7 @@ const ChatPage: React.FC = () => {
       };
 
       setExecutions(prev => [...prev, newExecution]);
+      setCurrentExecutionId(newExecution.id);
 
       // Process streaming events
       while (true) {
@@ -598,6 +783,7 @@ const ChatPage: React.FC = () => {
       setCurrentPhase('Error');
     } finally {
       setIsStreaming(false);
+      setCurrentExecutionId(null);
     }
   }, [inputMessage, isStreaming, currentThreadId, selectedAgent]);
 
@@ -614,10 +800,21 @@ const ChatPage: React.FC = () => {
             updated.threadId = event.thread_id;
               setCurrentThreadId(event.thread_id);
           }
+          if (event.execution_id) {
+            setCurrentExecutionId(event.execution_id);
+          }
+          if (event.exchange_id) {
+            console.log('📝 Setting exchange ID from event:', event.exchange_id);
+            updated.exchangeId = event.exchange_id;
+          }
           break;
 
         case 'initialization':
           updated.currentPhase = 'Initializing...';
+          if (event.exchange_id) {
+            console.log('📝 Setting exchange ID from initialization event:', event.exchange_id);
+            updated.exchangeId = event.exchange_id;
+          }
           break;
 
         case 'node_start':
@@ -709,6 +906,9 @@ const ChatPage: React.FC = () => {
           updated.currentPhase = 'Complete';
           setCurrentPhase('Ready');
           
+          // Clear current execution ID
+          setCurrentExecutionId(null);
+          
           // Reload conversation history to include the new conversation
           if (event.thread_id) {
             setConversationThreads(prev => {
@@ -732,10 +932,24 @@ const ChatPage: React.FC = () => {
             });
           }
           break;
+          
+        case 'execution_stopped':
+          updated.isComplete = true;
+          updated.currentPhase = 'Stopped by user';
+          updated.finalResponse = event.partial_response || updated.finalResponse;
+          setCurrentPhase('Stopped');
+          
+          // Clear current execution ID
+          setCurrentExecutionId(null);
+          break;
 
         case 'execution_error':
           updated.isComplete = true;
           updated.currentPhase = 'Error';
+          setCurrentPhase('Error');
+          
+          // Clear current execution ID
+          setCurrentExecutionId(null);
           break;
 
         case 'quota_pause_start':
@@ -1453,6 +1667,24 @@ const ChatPage: React.FC = () => {
                   <Activity className="w-4 h-4 text-green-500" />
                   <span className="text-gray-600 dark:text-gray-300">{currentPhase}</span>
                 </div>
+                
+                {/* Stop Execution Button */}
+                {isStreaming && currentExecutionId && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (currentExecutionId) {
+                        stopExecution(currentExecutionId);
+                      }
+                    }}
+                    className="h-7 px-3 text-xs"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Stop
+                  </Button>
+                )}
+                
                 <div className="flex items-center gap-1">
                   <Badge variant="outline" className="text-xs">
                     {selectedAgent === 'multi' ? 'Planning + Execution' : 'Streamlined'}
@@ -1490,12 +1722,91 @@ const ChatPage: React.FC = () => {
                     <div key={execution.id} className="space-y-4">
                     {/* User Message */}
                     <div className="flex justify-end">
-                        <div className="max-w-[70%] bg-blue-500 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-sm">
+                        <div className="max-w-[70%] bg-blue-500 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-sm group relative">
                           <div className="flex items-center gap-2 mb-1">
                             <User className="w-4 h-4" />
                             <span className="text-sm font-medium opacity-90">You</span>
+                            
+                            {/* Edit Button */}
+                            {execution.isComplete && execution.exchangeId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  console.log('📝 Edit button clicked, execution:', { id: execution.id, exchangeId: execution.exchangeId, threadId: execution.threadId });
+                                  setEditingMessageId(execution.id);
+                                  setEditingMessage(execution.userMessage);
+                                }}
+                                className="ml-auto p-1 h-6 w-6 text-white/70 hover:text-white hover:bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
-                          <p className="text-sm leading-relaxed">{execution.userMessage}</p>
+                          
+                          {/* Message Content or Edit Input */}
+                          {editingMessageId === execution.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingMessage}
+                                onChange={(e) => setEditingMessage(e.target.value)}
+                                className="text-sm bg-white text-gray-900 border-0 resize-none"
+                                rows={3}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && e.ctrlKey) {
+                                    e.preventDefault();
+                                    // Save and re-run
+                                    const handleEditAndRerun = async () => {
+                                      try {
+                                        await editMessage(execution.threadId, execution.exchangeId, editingMessage);
+                                        setEditingMessageId(null);
+                                        setEditingMessage('');
+                                        await rerunFromMessage(execution.threadId, editingMessage);
+                                      } catch (error) {
+                                        console.error('Error editing and re-running:', error);
+                                      }
+                                    };
+                                    handleEditAndRerun();
+                                  } else if (e.key === 'Escape') {
+                                    setEditingMessageId(null);
+                                    setEditingMessage('');
+                                  }
+                                }}
+                              />
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingMessageId(null);
+                                    setEditingMessage('');
+                                  }}
+                                  className="text-white/70 hover:text-white hover:bg-blue-600 h-6 px-2 text-xs"
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await editMessage(execution.threadId, execution.exchangeId, editingMessage);
+                                      setEditingMessageId(null);
+                                      setEditingMessage('');
+                                      await rerunFromMessage(execution.threadId, editingMessage);
+                                    } catch (error) {
+                                      console.error('Error editing and re-running:', error);
+                                    }
+                                  }}
+                                  className="text-white/70 hover:text-white hover:bg-blue-600 h-6 px-2 text-xs"
+                                >
+                                  Save & Re-run
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm leading-relaxed">{execution.userMessage}</p>
+                          )}
                       </div>
                     </div>
 
@@ -1583,30 +1894,46 @@ const ChatPage: React.FC = () => {
               )}
             </div>
 
-            {/* Input Area */}
+                        {/* Input Area */}
             <div className="border-t dark:border-gray-700 p-4">
-              <div className="flex gap-2">
-                <Input
+              <div className="flex gap-2 items-end">
+                <Textarea
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder={`Ask me anything... (${selectedAgent === 'multi' ? 'Multi-Agent' : 'Single Agent'} mode)`}
-                  className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                disabled={isStreaming}
-              />
-              <Button
-                onClick={handleSendMessage}
+                  className="flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 min-h-[44px] max-h-[200px] resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  disabled={isStreaming}
+                  style={{
+                    height: 'auto',
+                    minHeight: '44px',
+                    maxHeight: '200px',
+                    overflowY: inputMessage.split('\n').length > 8 ? 'auto' : 'hidden'
+                  }}
+                  onInput={(e) => {
+                    const textarea = e.target as HTMLTextAreaElement;
+                    textarea.style.height = 'auto';
+                    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+                  }}
+                />
+                <Button
+                  onClick={handleSendMessage}
                   disabled={!inputMessage.trim() || isStreaming}
-                  className="px-4"
-              >
-                {isStreaming ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </Button>
+                  className="px-4 h-11"
+                >
+                  {isStreaming ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
         </Card>
         </div>
       </div>

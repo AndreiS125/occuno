@@ -18,311 +18,51 @@ from core.config import settings
 from core.logging_config import get_logger
 from agents.tools.memory_tools import get_user_memories_for_prompt
 
+# Import SQLite repository classes
+from repositories.sqlite_conversation_repository import (
+    SQLiteConversationRepository,
+    ConversationHistory,
+    ExchangeSummary,
+    AgentMessage,
+    StreamingEvent
+)
+
 logger = get_logger("memory_system")
-
-
-class AgentMessage:
-    """Represents a single agent message/response."""
-    
-    def __init__(self, agent: str, content: str, message_type: str = "response", thinking_content: str = "", tool_calls: List[Dict] = None, timestamp: str = None):
-        self.agent = agent  # 'planning' or 'executor'
-        self.content = content
-        self.message_type = message_type  # 'response', 'thinking', 'tool_call', 'tool_result'
-        self.thinking_content = thinking_content
-        self.tool_calls = tool_calls or []
-        self.timestamp = timestamp or datetime.utcnow().isoformat()
-        self.id = str(uuid.uuid4())
-        
-        # Enhanced tool data for better frontend display
-        self.tool_name = None
-        self.tool_args = {}
-        self.tool_result_parsed = {}
-        self.tool_call_id = None
-        
-        # If this is a tool result, try to extract structured data
-        if message_type == "tool_result" and tool_calls:
-            for tool_call in tool_calls:
-                if isinstance(tool_call, dict):
-                    self.tool_name = tool_call.get('name')
-                    self.tool_call_id = tool_call.get('call_id')
-                    # Try to parse the content as JSON for structured data
-                    try:
-                        self.tool_result_parsed = json.loads(content) if content else {}
-                    except (json.JSONDecodeError, TypeError):
-                        self.tool_result_parsed = {"raw_content": content}
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "agent": self.agent,
-            "content": self.content,
-            "message_type": self.message_type,
-            "thinking_content": self.thinking_content,
-            "tool_calls": self.tool_calls,
-            "timestamp": self.timestamp,
-            # Enhanced tool data
-            "tool_name": self.tool_name,
-            "tool_args": self.tool_args,
-            "tool_result_parsed": self.tool_result_parsed,
-            "tool_call_id": self.tool_call_id
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AgentMessage':
-        msg = cls(
-            agent=data["agent"],
-            content=data["content"],
-            message_type=data.get("message_type", "response"),
-            thinking_content=data.get("thinking_content", ""),
-            tool_calls=data.get("tool_calls", []),
-            timestamp=data.get("timestamp")
-        )
-        msg.id = data.get("id", str(uuid.uuid4()))
-        
-        # Load enhanced tool data
-        msg.tool_name = data.get("tool_name")
-        msg.tool_args = data.get("tool_args", {})
-        msg.tool_result_parsed = data.get("tool_result_parsed", {})
-        msg.tool_call_id = data.get("tool_call_id")
-        
-        return msg
-
-
-class StreamingEvent:
-    """Represents a streaming event during agent execution."""
-    
-    def __init__(self, event_type: str, agent: str, content: str, metadata: Dict = None, timestamp: str = None):
-        self.event_type = event_type  # 'thinking', 'tool_call', 'tool_result', 'agent_response'
-        self.agent = agent
-        self.content = content
-        self.metadata = metadata or {}
-        self.timestamp = timestamp or datetime.utcnow().isoformat()
-        self.id = str(uuid.uuid4())
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "event_type": self.event_type,
-            "agent": self.agent,
-            "content": self.content,
-            "metadata": self.metadata,
-            "timestamp": self.timestamp
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StreamingEvent':
-        event = cls(
-            event_type=data["event_type"],
-            agent=data["agent"],
-            content=data["content"],
-            metadata=data.get("metadata", {}),
-            timestamp=data.get("timestamp")
-        )
-        event.id = data.get("id", str(uuid.uuid4()))
-        return event
-
-
-class ExchangeSummary:
-    """Represents a single exchange in the conversation."""
-    
-    def __init__(self, user_message: str, planner_summary: str = "", executor_summary: str = ""):
-        self.user_message = user_message
-        self.planner_summary = planner_summary
-        self.executor_summary = executor_summary
-        self.timestamp = datetime.utcnow().isoformat()
-        self.id = str(uuid.uuid4())
-        
-        # New fields for detailed conversation tracking
-        self.agent_messages: List[AgentMessage] = []
-        self.streaming_events: List[StreamingEvent] = []
-        self.final_response = ""
-        self.execution_metadata = {}
-        self.is_complete = False
-    
-    def add_agent_message(self, agent: str, content: str, message_type: str = "response", thinking_content: str = "", tool_calls: List[Dict] = None):
-        """Add an agent message to this exchange."""
-        message = AgentMessage(agent, content, message_type, thinking_content, tool_calls)
-        self.agent_messages.append(message)
-        return message
-    
-    def add_streaming_event(self, event_type: str, agent: str, content: str, metadata: Dict = None):
-        """Add a streaming event to this exchange."""
-        event = StreamingEvent(event_type, agent, content, metadata)
-        self.streaming_events.append(event)
-        return event
-    
-    def set_final_response(self, response: str):
-        """Set the final response for this exchange."""
-        self.final_response = response
-        self.is_complete = True
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "user_message": self.user_message,
-            "planner_summary": self.planner_summary,
-            "executor_summary": self.executor_summary,
-            "timestamp": self.timestamp,
-            "agent_messages": [msg.to_dict() for msg in self.agent_messages],
-            "streaming_events": [event.to_dict() for event in self.streaming_events],
-            "final_response": self.final_response,
-            "execution_metadata": self.execution_metadata,
-            "is_complete": self.is_complete
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ExchangeSummary':
-        exchange = cls(
-            user_message=data["user_message"],
-            planner_summary=data.get("planner_summary", ""),
-            executor_summary=data.get("executor_summary", "")
-        )
-        exchange.id = data.get("id", str(uuid.uuid4()))
-        exchange.timestamp = data.get("timestamp", datetime.utcnow().isoformat())
-        exchange.final_response = data.get("final_response", "")
-        exchange.execution_metadata = data.get("execution_metadata", {})
-        exchange.is_complete = data.get("is_complete", False)
-        
-        # Load agent messages
-        exchange.agent_messages = [
-            AgentMessage.from_dict(msg_data) 
-            for msg_data in data.get("agent_messages", [])
-        ]
-        
-        # Load streaming events
-        exchange.streaming_events = [
-            StreamingEvent.from_dict(event_data) 
-            for event_data in data.get("streaming_events", [])
-        ]
-        
-        return exchange
-
-
-class ConversationHistory:
-    """Manages the conversation history for a thread."""
-    
-    def __init__(self, thread_id: str):
-        self.thread_id = thread_id
-        self.exchanges: List[ExchangeSummary] = []
-        self.created_at = datetime.utcnow().isoformat()
-        self.last_updated = datetime.utcnow().isoformat()
-    
-    def add_exchange(self, user_message: str) -> ExchangeSummary:
-        """Add a new exchange to the conversation."""
-        exchange = ExchangeSummary(user_message)
-        self.exchanges.append(exchange)
-        self.last_updated = datetime.utcnow().isoformat()
-        return exchange
-    
-    def update_planner_summary(self, exchange_id: str, planner_summary: str):
-        """Update the planner summary for a specific exchange."""
-        for exchange in self.exchanges:
-            if exchange.id == exchange_id:
-                exchange.planner_summary = planner_summary
-                self.last_updated = datetime.utcnow().isoformat()
-                break
-    
-    def update_executor_summary(self, exchange_id: str, executor_summary: str):
-        """Update the executor summary for a specific exchange."""
-        for exchange in self.exchanges:
-            if exchange.id == exchange_id:
-                exchange.executor_summary = executor_summary
-                self.last_updated = datetime.utcnow().isoformat()
-                break
-    
-    def get_last_10_exchanges(self) -> List[ExchangeSummary]:
-        """Get the last 10 exchanges for context."""
-        return self.exchanges[-10:] if len(self.exchanges) > 10 else self.exchanges
-    
-    def get_formatted_history_for_planner(self) -> str:
-        """Format the last 10 exchanges for the planning agent."""
-        recent_exchanges = self.get_last_10_exchanges()
-        if not recent_exchanges:
-            return "No previous conversation history."
-        
-        formatted_history = []
-        for exchange in recent_exchanges:
-            formatted_history.append(f"User: {exchange.user_message}")
-            if exchange.planner_summary:
-                formatted_history.append(f"Planner: {exchange.planner_summary}")
-            if exchange.executor_summary:
-                formatted_history.append(f"Executor: {exchange.executor_summary}")
-            formatted_history.append("---")
-        
-        return "\n".join(formatted_history)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "thread_id": self.thread_id,
-            "exchanges": [exchange.to_dict() for exchange in self.exchanges],
-            "created_at": self.created_at,
-            "last_updated": self.last_updated
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ConversationHistory':
-        history = cls(data["thread_id"])
-        history.exchanges = [ExchangeSummary.from_dict(ex) for ex in data.get("exchanges", [])]
-        history.created_at = data.get("created_at", datetime.utcnow().isoformat())
-        history.last_updated = data.get("last_updated", datetime.utcnow().isoformat())
-        return history
 
 
 class MemorySystem:
     """
     Manages conversation memory and exchange summaries for the agent system.
-    Stores user messages, planner summaries, and executor summaries for multi-turn dialogue.
+    Now uses SQLite for persistent storage instead of JSON files.
     """
     
     def __init__(self):
         self.checkpointer = MemorySaver()
         self.logger = logger
-        self.memory_file = Path(settings.data_file_path).parent / "conversation_history.json"
+        self.conversation_repo = SQLiteConversationRepository()
         self.current_thread_id = None
         self.current_exchange_id = None
         
-        # Ensure memory file exists
-        self.memory_file.parent.mkdir(parents=True, exist_ok=True)
-        if not self.memory_file.exists():
-            self._save_memory_data({})
+        # Keep legacy JSON file path for migration purposes
+        self.legacy_memory_file = Path(settings.data_file_path).parent / "conversation_history.json"
     
-    def _load_memory_data(self) -> Dict[str, Any]:
-        """Load memory data from file."""
+    def _load_legacy_memory_data(self) -> Dict[str, Any]:
+        """Load legacy memory data from JSON file (for migration)."""
         try:
-            with open(self.memory_file, 'r') as f:
-                return json.load(f)
+            if self.legacy_memory_file.exists():
+                with open(self.legacy_memory_file, 'r') as f:
+                    return json.load(f)
+            return {}
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
     
-    def _save_memory_data(self, data: Dict[str, Any]):
-        """Save memory data to file."""
-        try:
-            with open(self.memory_file, 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            self.logger.error(f"Error saving memory data: {e}")
-    
     async def get_conversation_history(self, thread_id: str) -> ConversationHistory:
         """Get conversation history for a thread."""
-        try:
-            data = self._load_memory_data()
-            if thread_id in data:
-                return ConversationHistory.from_dict(data[thread_id])
-            else:
-                return ConversationHistory(thread_id)
-        except Exception as e:
-            self.logger.error(f"Error getting conversation history: {e}")
-            return ConversationHistory(thread_id)
+        return await self.conversation_repo.get_conversation_history(thread_id)
     
     async def save_conversation_history(self, history: ConversationHistory):
-        """Save conversation history to file."""
-        try:
-            data = self._load_memory_data()
-            data[history.thread_id] = history.to_dict()
-            self._save_memory_data(data)
-            self.logger.info(f"Saved conversation history for thread {history.thread_id}")
-        except Exception as e:
-            self.logger.error(f"Error saving conversation history: {e}")
+        """Save conversation history to database."""
+        await self.conversation_repo.save_conversation_history(history)
     
     async def start_new_exchange(self, thread_id: str, user_message: str) -> str:
         """Start a new exchange and return the exchange ID."""
@@ -336,7 +76,9 @@ class MemorySystem:
         self.logger.info(f"Started new exchange {exchange.id} for thread {thread_id}")
         return exchange.id
     
-    async def add_agent_message(self, thread_id: str, exchange_id: str, agent: str, content: str, message_type: str = "response", thinking_content: str = "", tool_calls: List[Dict] = None):
+    async def add_agent_message(self, thread_id: str, exchange_id: str, agent: str, content: str, 
+                               message_type: str = "response", thinking_content: str = "", 
+                               tool_calls: List[Dict] = None):
         """Add an agent message to an exchange."""
         history = await self.get_conversation_history(thread_id)
         for exchange in history.exchanges:
@@ -349,7 +91,8 @@ class MemorySystem:
         self.logger.error(f"Exchange {exchange_id} not found in thread {thread_id}")
         return None
     
-    async def add_streaming_event(self, thread_id: str, exchange_id: str, event_type: str, agent: str, content: str, metadata: Dict = None):
+    async def add_streaming_event(self, thread_id: str, exchange_id: str, event_type: str, 
+                                 agent: str, content: str, metadata: Dict = None):
         """Add a streaming event to an exchange."""
         history = await self.get_conversation_history(thread_id)
         for exchange in history.exchanges:
@@ -496,7 +239,7 @@ class MemorySystem:
         try:
             thread_id = str(uuid.uuid4())
             
-            # Initialize empty history
+            # Initialize empty history (this will create the thread in database)
             history = ConversationHistory(thread_id)
             await self.save_conversation_history(history)
             
@@ -534,16 +277,13 @@ class MemorySystem:
     async def clear_thread_history(self, thread_id: str) -> bool:
         """Clear the conversation history for a thread."""
         try:
-            # Remove from memory file
-            data = self._load_memory_data()
-            thread_existed = thread_id in data
+            # Clear from SQLite database
+            success = await self.conversation_repo.clear_thread_history(thread_id)
             
-            if thread_existed:
-                del data[thread_id]
-                self._save_memory_data(data)
-                self.logger.info(f"Removed thread {thread_id} from memory file")
+            if success:
+                self.logger.info(f"Cleared thread {thread_id} from database")
             else:
-                self.logger.info(f"Thread {thread_id} not found in memory file (already deleted or never existed)")
+                self.logger.warning(f"Failed to clear thread {thread_id} from database")
             
             # Clear LangGraph state (always do this to ensure clean state)
             try:
@@ -566,12 +306,12 @@ class MemorySystem:
                 self.checkpointer.put(config, reset_state, {}, {})
                 self.logger.info(f"Cleared LangGraph state for thread {thread_id}")
             except Exception as checkpoint_error:
-                # If checkpointer fails, still consider it successful since we cleared the memory file
+                # If checkpointer fails, still consider it successful since we cleared the database
                 self.logger.warning(f"Failed to clear LangGraph state for thread {thread_id}: {checkpoint_error}")
-                self.logger.info("Continuing since memory file was cleared successfully")
+                self.logger.info("Continuing since database was cleared successfully")
             
             self.logger.info(f"Successfully cleared conversation history for thread: {thread_id}")
-            return True
+            return success
         
         except Exception as e:
             self.logger.error(f"Error clearing thread history for {thread_id}: {e}")
@@ -602,6 +342,115 @@ class MemorySystem:
             self.logger.error(f"Error getting conversation summary: {e}")
             return f"Error retrieving summary for thread {thread_id}: {str(e)}"
     
+    async def edit_message_and_truncate(self, thread_id: str, exchange_id: str, new_message: str) -> bool:
+        """Edit a user message and truncate all conversation history after that exchange."""
+        try:
+            history = await self.get_conversation_history(thread_id)
+            
+            # Find the exchange to edit
+            exchange_index = None
+            for i, exchange in enumerate(history.exchanges):
+                if exchange.id == exchange_id:
+                    exchange_index = i
+                    break
+            
+            if exchange_index is None:
+                self.logger.error(f"Exchange {exchange_id} not found in thread {thread_id}")
+                return False
+            
+            # Edit the message
+            history.exchanges[exchange_index].user_message = new_message
+            history.exchanges[exchange_index].timestamp = datetime.utcnow().isoformat()
+            
+            # Truncate all exchanges after this one
+            history.exchanges = history.exchanges[:exchange_index + 1]
+            
+            # Clear the final response and completion status from the edited exchange
+            history.exchanges[exchange_index].final_response = ""
+            history.exchanges[exchange_index].is_complete = False
+            history.exchanges[exchange_index].agent_messages = []
+            history.exchanges[exchange_index].streaming_events = []
+            
+            # Update history metadata
+            history.last_updated = datetime.utcnow().isoformat()
+            
+            await self.save_conversation_history(history)
+            
+            # Clear LangGraph state to prevent conflicts
+            try:
+                user_memories = await get_user_memories_for_prompt()
+                reset_state = {
+                    "messages": [],
+                    "planning_analysis": "",
+                    "user_memories": user_memories,
+                    "thread_id": thread_id,
+                    "exchange_id": None,
+                    "user_input": "",
+                    "conversation_history": "No previous conversation history.",
+                    "iteration_count": 0,
+                    "terminal_tool_executed": False,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "last_updated": datetime.utcnow().isoformat(),
+                    "edited_at": datetime.utcnow().isoformat()
+                }
+                
+                config = RunnableConfig(
+                    configurable={"thread_id": thread_id}
+                )
+                
+                self.checkpointer.put(config, reset_state, {}, {})
+                self.logger.info(f"Cleared LangGraph state after message edit for thread {thread_id}")
+            except Exception as checkpoint_error:
+                self.logger.warning(f"Failed to clear LangGraph state after edit for thread {thread_id}: {checkpoint_error}")
+            
+            self.logger.info(f"Successfully edited message and truncated history for exchange {exchange_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error editing message and truncating history: {e}")
+            return False
+    
+    async def get_exchange_by_id(self, thread_id: str, exchange_id: str) -> Optional[ExchangeSummary]:
+        """Get a specific exchange by ID."""
+        try:
+            history = await self.get_conversation_history(thread_id)
+            
+            for exchange in history.exchanges:
+                if exchange.id == exchange_id:
+                    return exchange
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting exchange {exchange_id} from thread {thread_id}: {e}")
+            return None
+    
+    async def mark_exchange_incomplete(self, thread_id: str, exchange_id: str) -> bool:
+        """Mark an exchange as incomplete (for re-running)."""
+        try:
+            history = await self.get_conversation_history(thread_id)
+            
+            for exchange in history.exchanges:
+                if exchange.id == exchange_id:
+                    exchange.is_complete = False
+                    exchange.final_response = ""
+                    exchange.timestamp = datetime.utcnow().isoformat()
+                    
+                    await self.save_conversation_history(history)
+                    self.logger.info(f"Marked exchange {exchange_id} as incomplete")
+                    return True
+            
+            self.logger.error(f"Exchange {exchange_id} not found in thread {thread_id}")
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error marking exchange incomplete: {e}")
+            return False
+
     def get_checkpointer(self):
         """Get the LangGraph checkpointer."""
-        return self.checkpointer 
+        return self.checkpointer
+    
+    async def get_stats(self) -> Dict[str, Any]:
+        """Get conversation statistics."""
+        return await self.conversation_repo.get_stats() 

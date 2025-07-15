@@ -644,3 +644,13 @@ body:has([data-radix-select-content][data-state="open"]) {
     background: radial-gradient(circle, var(--tw-gradient-stops));
   }
 } 
+
+/* Hide native checkboxes in recurring days section */
+.checkbox-container input[type="checkbox"] {
+  display: none !important;
+}
+
+/* Ensure Radix UI checkboxes are properly styled */
+.checkbox-container [data-radix-checkbox-root] {
+  display: flex !important;
+} 

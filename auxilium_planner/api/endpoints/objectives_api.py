@@ -15,7 +15,9 @@ def get_objective_repo():
     return ObjectiveRepository()
 
 def get_gamification_service():
-    return GamificationService()
+    # Pass the same repository instance to ensure consistency
+    objective_repo = ObjectiveRepository()
+    return GamificationService(objective_repo=objective_repo)
 
 # Request/Response models
 class RecurringInfoRequest(BaseModel):
@@ -293,6 +295,8 @@ async def complete_objective(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Mark an objective as completed and process gamification."""
+    print(f"🎯 Completing objective: {objective_id}")
+    
     # Update status
     updated = await objective_repo.update(
         objective_id, 
@@ -302,11 +306,17 @@ async def complete_objective(
     if not updated:
         raise HTTPException(status_code=404, detail="Objective not found")
     
+    print(f"📊 Objective type: {updated.objective_type}, Title: {updated.title}")
+    
     # Process gamification
     if updated.objective_type == ObjectiveType.TASK:
+        print("🔄 Processing task completion...")
         gamification_result = await gamification.process_task_completion(objective_id)
     else:
+        print("🔄 Processing objective completion...")
         gamification_result = await gamification.process_objective_completion(objective_id)
+    
+    print(f"🎮 Gamification result: {gamification_result}")
     
     return {
         "objective": updated.dict(),

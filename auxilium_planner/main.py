@@ -27,6 +27,11 @@ async def lifespan(app: FastAPI):
     # Startup
     startup_logger.info(f"🚀 Starting {settings.app_name}")
     
+    # Initialize SQLite database
+    from core.database import initialize_database
+    await initialize_database()
+    startup_logger.info("🗄️ SQLite database initialized")
+    
     # Remove the problematic profile initialization that causes resets
     # Profile will be created lazily when first accessed
     startup_logger.info("✅ System ready")
@@ -35,6 +40,8 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     shutdown_logger = get_logger("shutdown")
+    from core.database import db_manager
+    await db_manager.close_all_connections()
     shutdown_logger.info("👋 Shutting down")
 
 # Create FastAPI app
@@ -85,7 +92,10 @@ app.include_router(
     tags=["agent"]
 )
 
+
+
 app_logger.info("✅ Agent API router included")
+
 
 if __name__ == "__main__":
     main_logger = get_logger("main")

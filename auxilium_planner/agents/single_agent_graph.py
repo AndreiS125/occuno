@@ -188,7 +188,7 @@ class SingleAgentGraph:
         iteration_count = state.get("iteration_count", 0)
         
         # Check if we've reached iteration limit
-        if iteration_count >= 10:  # More aggressive limit to prevent hanging
+        if iteration_count >= 50:  # More aggressive limit to prevent hanging
             logger.info(f"🔄 Single agent reached iteration limit ({iteration_count}), finalizing")
             return "finalize"
         
@@ -276,12 +276,43 @@ class SingleAgentGraph:
                 
                 messages.append(HumanMessage(content=user_message_content))
             else:
-                # Continue conversation
-                messages.extend(state.get("messages", []))
+                # Continue conversation - validate existing messages
+                existing_messages = state.get("messages", [])
+                valid_existing_messages = []
+                for msg in existing_messages:
+                    if hasattr(msg, 'content') and msg.content and msg.content.strip():
+                        valid_existing_messages.append(msg)
+                    else:
+                        logger.warning(f"🚨 Skipping empty message in continuation: {type(msg).__name__}")
+                
+                messages.extend(valid_existing_messages)
                 messages.append(HumanMessage(content="Continue with the task."))
             
+            # Debug: Log the messages being sent to the agent
+            logger.info(f"🔍 Sending {len(messages)} messages to agent:")
+            for i, msg in enumerate(messages):
+                logger.info(f"🔍 Message {i}: {type(msg).__name__} - Content length: {len(msg.content) if hasattr(msg, 'content') else 'N/A'}")
+                if hasattr(msg, 'content') and msg.content:
+                    logger.info(f"🔍 Message {i} preview: {msg.content[:100]}...")
+                else:
+                    logger.info(f"🔍 Message {i} has empty content!")
+            
+            # Validate messages before sending to agent
+            valid_messages = []
+            for msg in messages:
+                if hasattr(msg, 'content') and msg.content and msg.content.strip():
+                    valid_messages.append(msg)
+                else:
+                    logger.warning(f"🚨 Skipping empty message: {type(msg).__name__}")
+            
+            if not valid_messages:
+                logger.error("🚨 No valid messages to send to agent!")
+                raise ValueError("No valid messages to send to agent")
+            
+            logger.info(f"🔍 Sending {len(valid_messages)} valid messages to agent")
+            
             # Get response from agent
-            response = await self.agent.ainvoke(messages)
+            response = await self.agent.ainvoke(valid_messages)
             final_response = self._process_agent_response(response)
             
             return {
@@ -430,6 +461,11 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
         
         # Store tool calls to associate with results
         self.pending_tool_calls = {}  # tool_call_id -> {tool_name, tool_args, agent}
+        
+        # Stop execution support
+        self.stop_requested = False
+        self.stop_lock = asyncio.Lock()
+        self.active_executions = {}  # execution_id -> {thread_id, exchange_id, stop_event}
     
     async def emit_event(self, event: Dict[str, Any]):
         """Emit a streaming event"""
@@ -450,6 +486,41 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
                     event.get('content', ''),
                     event
                 )
+    
+    async def request_stop(self, execution_id: str) -> bool:
+        """Request to stop a specific execution"""
+        async with self.stop_lock:
+            if execution_id in self.active_executions:
+                execution_info = self.active_executions[execution_id]
+                execution_info['stop_event'].set()
+                
+                # Emit stop event
+                await self.emit_event({
+                    'type': 'execution_stop_requested',
+                    'execution_id': execution_id,
+                    'thread_id': execution_info['thread_id'],
+                    'exchange_id': execution_info['exchange_id']
+                })
+                
+                logger.info(f"🛑 Stop requested for execution {execution_id}")
+                return True
+            else:
+                logger.warning(f"❌ Execution {execution_id} not found in active executions")
+                return False
+    
+    async def check_stop_requested(self) -> bool:
+        """Check if stop has been requested for current execution"""
+        if self.current_execution_id in self.active_executions:
+            execution_info = self.active_executions[self.current_execution_id]
+            return execution_info['stop_event'].is_set()
+        return False
+    
+    async def cleanup_execution(self, execution_id: str):
+        """Clean up execution tracking"""
+        async with self.stop_lock:
+            if execution_id in self.active_executions:
+                del self.active_executions[execution_id]
+                logger.info(f"🧹 Cleaned up execution {execution_id}")
     
     async def process_user_input_streaming(self, user_input: str, thread_id: Optional[str] = None):
         """Process user input with streaming events"""
@@ -472,6 +543,17 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
             exchange_id = await self.memory_system.start_new_exchange(thread_id, user_input)
             self.current_exchange_id = exchange_id
             
+            # Register this execution for stop requests
+            stop_event = asyncio.Event()
+            async with self.stop_lock:
+                self.active_executions[self.current_execution_id] = {
+                    'thread_id': thread_id,
+                    'exchange_id': exchange_id,
+                    'stop_event': stop_event
+                }
+                logger.info(f"📝 Registered execution {self.current_execution_id} for stopping")
+                logger.info(f"📝 Active executions now: {list(self.active_executions.keys())}")
+            
             # Emit start event
             await self.emit_event({
                 'type': 'execution_start',
@@ -491,8 +573,22 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
             # Override the agent method to capture original thinking content
             self._setup_streaming_overrides()
             
-            # Start processing with streaming
+            # Start processing with streaming and stop checks
             final_response = await self._process_with_streaming(user_input, thread_id)
+            
+            # Check if execution was stopped
+            if await self.check_stop_requested():
+                logger.info("🛑 Execution was stopped by user request")
+                await self.emit_event({
+                    'type': 'execution_stopped',
+                    'thread_id': thread_id,
+                    'exchange_id': exchange_id,
+                    'partial_response': final_response
+                })
+                # Still store partial response in memory
+                await self.memory_system.set_final_response(thread_id, exchange_id, f"[EXECUTION STOPPED] {final_response}")
+                return final_response
+            
             logger.info(f"✅ StreamingSingleAgentGraph: Processing complete, final response: {final_response[:100]}...")
             
             # Store final response in memory
@@ -533,6 +629,9 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
             self.streaming_active = False
             self.pending_tool_calls = {}
             self._restore_original_methods()
+            # Clean up execution tracking
+            if hasattr(self, 'current_execution_id') and self.current_execution_id:
+                await self.cleanup_execution(self.current_execution_id)
     
     async def _process_with_streaming(self, user_input: str, thread_id: str) -> str:
         """Process the user input with detailed streaming events"""
@@ -551,7 +650,21 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
         
         # Stream execution with detailed events
         final_state = None
+        
+        # Debug: Log initial state
+        logger.info(f"🔍 Initial state for streaming: {initial_state}")
+        
         async for chunk in self.graph.astream(initial_state, config):
+            # Check if stop was requested
+            if await self.check_stop_requested():
+                logger.info("🛑 Stopping execution due to user request")
+                await self.emit_event({
+                    'type': 'execution_stopping',
+                    'thread_id': thread_id,
+                    'reason': 'user_request'
+                })
+                break
+            
             await self._emit_chunk_events(chunk)
             # Keep track of the final state
             final_state = chunk

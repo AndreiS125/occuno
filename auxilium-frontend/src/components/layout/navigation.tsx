@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/", icon: Home, label: "Dashboard", color: "from-blue-400 to-blue-600" },
   { href: "/objectives", icon: Target, label: "Objectives", color: "from-emerald-400 to-emerald-600" },
+
   { href: "/chat", icon: MessageCircle, label: "AI Chat", color: "from-indigo-400 to-indigo-600" },
   { href: "/calendar", icon: Calendar, label: "Calendar", color: "from-purple-400 to-purple-600" },
   { href: "/analytics", icon: BarChart3, label: "Analytics", color: "from-orange-400 to-orange-600" },

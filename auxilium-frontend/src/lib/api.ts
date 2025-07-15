@@ -168,6 +168,44 @@ export const userApi = {
     const response = await api.get("/user/coupons/definitions");
     return response.data;
   },
+
+  // Reward Configuration API
+  getRewardConfig: async () => {
+    const response = await api.get("/user/reward-config");
+    return response.data;
+  },
+
+  saveRewardConfig: async (config: any) => {
+    const response = await api.post("/user/reward-config", config);
+    return response.data;
+  },
+
+  deleteRewardConfig: async () => {
+    const response = await api.delete("/user/reward-config");
+    return response.data;
+  },
+
+  toggleRewardConfig: async (useCustom: boolean) => {
+    const response = await api.post("/user/reward-config/toggle", {
+      use_custom_rewards: useCustom
+    });
+    return response.data;
+  },
+
+  // Luck Status API
+  getLuckStatus: async () => {
+    const response = await api.get("/user/luck-status");
+    return response.data;
+  },
+
+  updateLuckFactor: async (luckFactor: number) => {
+    const response = await api.post("/user/luck-factor", {
+      luck_factor: luckFactor
+    });
+    return response.data;
+  },
 };
+
+
 
 export default api; 

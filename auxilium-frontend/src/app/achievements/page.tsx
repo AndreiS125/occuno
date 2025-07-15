@@ -27,7 +27,7 @@ import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
-import { MysteryBoxRealistic } from "@/components/ui";
+import MysteryBoxRealistic from "@/components/ui/mystery-box-realistic";
 import { GamificationExplainer } from "@/components/ui/gamification-explainer";
 import { Coupon } from "@/types";
 
@@ -672,7 +672,6 @@ export default function AchievementsPage() {
         isOpen={showMysteryBox3D}
         onOpen={handle3DMysteryBoxOpen}
         onClose={handle3DMysteryBoxClose}
-        modelPath="/models/treasure-chest.glb"
       />
     </div>
   );

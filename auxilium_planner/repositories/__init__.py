@@ -1,9 +1,15 @@
 from .file_repository import FileRepository
-from .objective_repository import ObjectiveRepository
-from .user_profile_repository import UserProfileRepository
+from .sqlite_objective_repository import SQLiteObjectiveRepository
+from .sqlite_user_profile_repository import SQLiteUserProfileRepository
+
+# Use SQLite repositories as default
+ObjectiveRepository = SQLiteObjectiveRepository
+UserProfileRepository = SQLiteUserProfileRepository
 
 __all__ = [
     "FileRepository",
     "ObjectiveRepository", 
-    "UserProfileRepository"
+    "UserProfileRepository",
+    "SQLiteObjectiveRepository",
+    "SQLiteUserProfileRepository"
 ] 

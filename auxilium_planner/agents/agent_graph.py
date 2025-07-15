@@ -63,17 +63,17 @@ class AgentGraph:
             "top_k": settings.llm_top_k,
             "max_retries": settings.retry_attempts,
             "include_thoughts": True,
-            "thinking_budget": 2000,
+            "thinking_budget": 20000,
             "timeout": settings.request_timeout
         }
         
         if settings.quota_manager_enabled:
-            self.planning_llm = create_quota_aware_chat_model(**model_config)
-            self.executor_llm = create_quota_aware_chat_model(**{**model_config, "temperature": model_config["temperature"] + 0.1, "thinking_budget": 400})
+            self.planning_llm = create_quota_aware_chat_model(**{**model_config, "model": "gemini-2.5-pro"})
+            self.executor_llm = create_quota_aware_chat_model(**{**model_config, "temperature": model_config["temperature"] + 0.1, "thinking_budget": 15000})
         else:
             base_config = {**model_config, "api_key": settings.google_api_key}
             self.planning_llm = ChatGoogleGenerativeAI(**base_config)
-            self.executor_llm = ChatGoogleGenerativeAI(**{**base_config, "temperature": base_config["temperature"] + 0.1, "thinking_budget": 400})
+            self.executor_llm = ChatGoogleGenerativeAI(**{**base_config, "temperature": base_config["temperature"] + 0.1, "thinking_budget": 15000})
         
         self.planning_agent = self.planning_llm.bind_tools(ALL_PLANNING_TOOLS)
         self.executor_agent = self.executor_llm.bind_tools(ALL_EXECUTOR_TOOLS)

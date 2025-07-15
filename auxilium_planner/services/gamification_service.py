@@ -1,6 +1,6 @@
 import random
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from uuid import UUID
 from datetime import datetime, timedelta
 from dataclasses import dataclass
@@ -11,15 +11,15 @@ from domain.models import (
     EarnedCoupon, MysteryBoxReward, AchievementDefinition,
     ObjectiveType, UserAchievement
 )
-from repositories.user_profile_repository import UserProfileRepository
-from repositories.objective_repository import ObjectiveRepository
+from repositories.sqlite_user_profile_repository import SQLiteUserProfileRepository
+from repositories import ObjectiveRepository
 
 class GamificationService:
     """Service for managing coupon-based gamification system with real-world rewards."""
     
-    def __init__(self):
-        self.user_repo = UserProfileRepository()
-        self.objective_repo = ObjectiveRepository()
+    def __init__(self, objective_repo = None, user_repo = None):
+        self.user_repo = user_repo or SQLiteUserProfileRepository()
+        self.objective_repo = objective_repo or ObjectiveRepository()
         self._achievement_definitions = self._load_achievement_definitions()
         self._coupon_definitions = self._load_coupon_definitions()
     
@@ -187,8 +187,8 @@ class GamificationService:
             )
         ]
     
-    def _create_coupon_with_expiration(self, coupon_type: CouponType, bonus_multiplier: float = 1.0) -> EarnedCoupon:
-        """Create a coupon with reasonable expiration time."""
+    def _create_coupon_with_expiration(self, coupon_type: CouponType, bonus_multiplier: float = 1.0, display_name: Optional[str] = None) -> EarnedCoupon:
+        """Create a coupon with reasonable expiration time and optional custom display name."""
         now = datetime.utcnow()
         
         # Calculate minimum viable expiration (12 hours from now)
@@ -205,6 +205,7 @@ class GamificationService:
         
         return EarnedCoupon(
             coupon_type=coupon_type,
+            display_name=display_name,
             earned_at=now,
             expires_at=end_of_day,
             is_used=False
@@ -411,11 +412,9 @@ class GamificationService:
             },
             "mystery_boxes_earned": len(levels_gained),  # Boxes from level-up
             
-            # NO COUPON DATA - Only XP
+            # Task completion specific data
             "urgency_message": urgency_message,
             "points_awarded": base_points,
-            "current_coupons": len([c for c in user_profile.earned_coupons if not c.is_used]),
-            "total_coupons_earned": user_profile.total_coupons_earned,
             "daily_progress": {
                 "completed": user_profile.daily_tasks_completed_today,
                 "goal": user_profile.daily_task_goal,
@@ -479,19 +478,22 @@ class GamificationService:
         # Get coupon definition
         coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
         
+        # Use the preserved display name from the wheel, fallback to backend definition
+        display_name = coupon.display_name or (coupon_def.display_name if coupon_def else "Unknown")
+        
         # Save profile
         await self.user_repo.save_profile(user_profile)
         
         return {
             "success": True,
-            "message": f"Enjoy your {coupon_def.display_name if coupon_def else 'reward'}!",
-            "coupon_name": coupon_def.display_name if coupon_def else "Unknown",
+            "message": f"Enjoy your {display_name}!",
+            "coupon_name": display_name,
             "duration_minutes": coupon_def.duration_minutes if coupon_def else 15,
-            "celebration": f"🎉 {coupon_def.display_name if coupon_def else 'Reward'} activated!"
+            "celebration": f"🎉 {display_name} activated!"
         }
     
     async def open_mystery_box(self, frontend_choice: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Open a mystery box with coupon rewards (wheel-like system)."""
+        """Open a mystery box with coupon rewards (backend-first selection)."""
         user_profile = await self.user_repo.ensure_default_profile()
         
         available_boxes = user_profile.mystery_boxes_earned - user_profile.mystery_boxes_opened
@@ -500,91 +502,102 @@ class GamificationService:
         
         user_profile.mystery_boxes_opened += 1
         
-        coupons_earned = []
-        reward_type = "COMMON"
-        reward_description = "✨ Common Coupon!"
+        # Apply luck mechanic - increases chances of better rewards
+        luck_boost = self._calculate_luck_boost(user_profile)
         
-        if frontend_choice and frontend_choice.get("coupon_type"):
-            # FRONTEND CHOICE SYSTEM: Use frontend wheel decision
-            choice_type = frontend_choice.get("coupon_type")
-            choice_name = frontend_choice.get("display_name", choice_type.replace('_', ' ').title())
+        # === BACKEND SELECTS REWARD FIRST ===
+        # Step 1: Determine reward tier based on probabilities and luck
+        base_roll = random.random()
+        roll = self._apply_luck_to_legacy_roll(base_roll, luck_boost)
+        
+        logging.info(f"🍀 Mystery box roll: {base_roll:.3f} → {roll:.3f} (luck: {luck_boost:.2f}x)")
+        
+        # Step 2: Select reward tier
+        if roll < 0.01:  # 1% - LEGENDARY
+            reward_tier = "LEGENDARY"
+        elif roll < 0.05:  # 5% - EPIC  
+            reward_tier = "EPIC"
+        elif roll < 0.20:  # 20% - RARE
+            reward_tier = "RARE"
+        elif roll < 0.50:  # 50% - COMMON
+            reward_tier = "COMMON"
+        else:  # 50% - NO_REWARD
+            reward_tier = "NO_REWARD"
+        
+        # Step 3: Load reward configuration to get actual segments
+        reward_config = None
+        try:
+            from api.endpoints.user_api import get_user_repo
+            user_repo = get_user_repo()
+            profile = await user_repo.ensure_default_profile()
             
-            # Handle special case for no reward
-            if choice_type == "no_reward":
-                reward_type = "EMPTY"
-                reward_description = "Empty box! Better luck next time!"
-                coupons_earned = []
+            if profile.custom_reward_config and profile.use_custom_rewards:
+                # Use custom configuration
+                reward_config = profile.custom_reward_config
+                tier_config = None
+                for tier in reward_config.reward_tiers:
+                    if tier.tier_name == reward_tier:
+                        tier_config = tier
+                        break
             else:
-                # Create dynamic coupon for any frontend choice
-                # Try to find existing coupon definition first
-                existing_coupon_def = None
-                for coupon_def in self._coupon_definitions:
-                    if coupon_def.coupon_type.value == choice_type:
-                        existing_coupon_def = coupon_def
+                # Use default configuration - need to create default segments
+                tier_config = self._get_default_tier_config(reward_tier)
+        except Exception as e:
+            logging.error(f"Failed to load reward config: {e}")
+            tier_config = self._get_default_tier_config(reward_tier)
+        
+        # Step 4: Select specific reward from the tier
+        coupons_earned = []
+        reward_type = reward_tier
+        reward_description = "Mystery reward!"
+        selected_segment = None
+        
+        if reward_tier == "NO_REWARD":
+            # No reward case
+            reward_description = "Empty box! Better luck next time!"
+            coupons_earned = []
+            selected_segment = {
+                "name": "📦 Empty Box",
+                "type": "no_reward",
+                "duration": 0,
+                "weight": 1
+            }
+        else:
+            # Select from available segments in the tier
+            if tier_config and hasattr(tier_config, 'segments') and tier_config.segments:
+                # Use configured segments
+                segments = tier_config.segments
+                total_weight = sum(seg.get('weight', 1) for seg in segments)
+                
+                # Weighted random selection
+                segment_roll = random.random() * total_weight
+                cumulative_weight = 0
+                
+                for segment in segments:
+                    cumulative_weight += segment.get('weight', 1)
+                    if segment_roll <= cumulative_weight:
+                        selected_segment = segment
                         break
                 
-                if existing_coupon_def:
-                    # Use existing backend coupon type
-                    coupon = self._create_coupon_with_expiration(existing_coupon_def.coupon_type)
-                    display_name = existing_coupon_def.display_name
-                    duration = existing_coupon_def.duration_minutes
-                else:
-                    # Create dynamic coupon for new frontend types
-                    # Map to a reasonable backend type or create generic one
-                    backend_coupon_type = self._map_to_backend_coupon_type(choice_type)
-                    coupon = self._create_coupon_with_expiration(backend_coupon_type)
-                    display_name = choice_name
-                    duration = frontend_choice.get("duration", 30)  # Default 30 min
+                if not selected_segment:
+                    selected_segment = segments[0]  # Fallback to first segment
+            else:
+                # Fallback to default segments
+                selected_segment = self._get_default_segment_for_tier(reward_tier)
+            
+            # Create coupon based on selected segment
+            if selected_segment:
+                segment_type = selected_segment.get('type', 'coffee_break')
+                segment_name = selected_segment.get('name', 'Coffee Break')
                 
+                # Try to find existing coupon definition
+                backend_coupon_type = self._map_to_backend_coupon_type(segment_type)
+                coupon = self._create_coupon_with_expiration(
+                    backend_coupon_type,
+                    display_name=segment_name
+                )
                 coupons_earned.append(coupon)
-                reward_type = "WHEEL_CHOICE"
-                reward_description = f"🎉 {display_name}!"
-            
-            logging.info(f"Mystery box opened with frontend choice: {choice_type} -> {reward_description}")
-            
-        else:
-            # Legacy random system for backwards compatibility
-            # WARNING: This should only be used for non-wheel mystery boxes
-            logging.warning("Mystery box opened without frontend choice - using legacy random system")
-            coupons_earned = []
-            roll = random.random()
-            
-            if roll < 0.01:  # 1% - LEGENDARY (3-5 rare coupons)
-                coupon_count = random.randint(3, 5)
-                for _ in range(coupon_count):
-                    coupon_type = self._get_random_coupon_type(rarity_boost=3.0)
-                    coupon = self._create_coupon_with_expiration(coupon_type)
-                    coupons_earned.append(coupon)
-                reward_type = "LEGENDARY"
-                reward_description = f"💎 LEGENDARY! {coupon_count} Premium Coupons!"
-            elif roll < 0.05:  # 5% - Epic (2-3 good coupons)
-                coupon_count = random.randint(2, 3)
-                for _ in range(coupon_count):
-                    coupon_type = self._get_random_coupon_type(rarity_boost=2.0)
-                    coupon = self._create_coupon_with_expiration(coupon_type)
-                    coupons_earned.append(coupon)
-                reward_type = "EPIC"
-                reward_description = f"⭐ Epic! {coupon_count} Great Coupons!"
-            elif roll < 0.20:  # 20% - Rare (1-2 uncommon coupons)
-                coupon_count = random.randint(1, 2)
-                for _ in range(coupon_count):
-                    coupon_type = self._get_random_coupon_type(rarity_boost=1.5)
-                    coupon = self._create_coupon_with_expiration(coupon_type)
-                    coupons_earned.append(coupon)
-                reward_type = "RARE"
-                reward_description = f"🎁 Rare! {coupon_count} Good Coupon{'s' if coupon_count > 1 else ''}!"
-            else:  # 75% - Common (1 common coupon)
-                coupon_type = self._get_random_coupon_type()
-                coupon = self._create_coupon_with_expiration(coupon_type)
-                coupons_earned.append(coupon)
-                reward_type = "COMMON"
-                reward_description = "✨ Common Coupon!"
-            
-            # Sometimes give streak insurance instead (5% chance)
-            if roll > 0.95 and user_profile.streak_insurance_count < 3:
-                user_profile.streak_insurance_count += 1
-                reward_description = "🛡️ SPECIAL: Streak Insurance! Protects your streak once."
-                coupons_earned = []  # No coupons, just insurance
+                reward_description = f"🎉 {segment_name}!"
         
         # Add coupons to profile (if any earned)
         if coupons_earned:
@@ -599,18 +612,18 @@ class GamificationService:
         for coupon in coupons_earned:
             coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
             if coupon_def:
-                coupon_descriptions.append(f"{coupon_def.display_name} ({coupon_def.duration_minutes}min)")
+                display_name = coupon.display_name or coupon_def.display_name
+                coupon_descriptions.append(f"{display_name} ({coupon_def.duration_minutes}min)")
         
         # Get the actual coupon types for wheel synchronization
         coupon_types_earned = []
         for coupon in coupons_earned:
-            coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
-            if coupon_def:
-                coupon_types_earned.append(coupon.coupon_type.value)
+            coupon_types_earned.append(coupon.coupon_type.value)
         
-        # Select a primary coupon for wheel display (first one if multiple)
+        # Select a primary coupon for wheel display
         primary_coupon_type = coupon_types_earned[0] if coupon_types_earned else None
         
+        # === RETURN BACKEND SELECTION TO FRONTEND ===
         return {
             "success": True,
             "reward_type": reward_type,
@@ -619,11 +632,27 @@ class GamificationService:
             "coupon_descriptions": coupon_descriptions,
             "boxes_remaining": user_profile.mystery_boxes_earned - user_profile.mystery_boxes_opened,
             "celebration": f"🎉 {reward_description}",
+            "luck_boost": luck_boost,
+            "luck_info": {
+                "base_luck": user_profile.luck_factor,
+                "total_luck": luck_boost,
+                "streak_bonus": min(user_profile.current_streak_days * 0.1, 0.5),
+                "level_bonus": min(user_profile.level * 0.02, 0.2),
+                "activity_bonus": 0.2 if user_profile.daily_tasks_completed_today >= user_profile.daily_task_goal else 0.0,
+                "comeback_bonus": 0.3 if user_profile.comeback_bonus_available else 0.0
+            },
             "wheel_result": {
                 "segment": reward_type,
                 "coupons": coupon_descriptions,
                 "primary_coupon_type": primary_coupon_type,
                 "all_coupon_types": coupon_types_earned
+            },
+            # === NEW: Backend selection for frontend wheel ===
+            "backend_selection": {
+                "tier": reward_tier,
+                "segment": selected_segment,
+                "roll_result": roll,
+                "base_roll": base_roll
             }
         }
     
@@ -983,14 +1012,24 @@ class GamificationService:
     
     async def process_objective_completion(self, objective_id: UUID) -> Dict[str, Any]:
         """Process objective completion with XP rewards instead of coupons."""
+        print(f"🔍 Looking for objective with ID: {objective_id}")
+        print(f"🗄️ Repository type: {type(self.objective_repo)}")
+        
         objective = await self.objective_repo.get_by_id(objective_id)
+        print(f"📋 Found objective: {objective}")
+        
         if not objective or objective.status != ObjectiveStatus.COMPLETED:
+            print(f"❌ Objective validation failed - Found: {objective is not None}, Status: {objective.status if objective else 'None'}")
             return {"success": False, "message": "Objective not found or not completed"}
+        
+        print(f"🎯 Processing completion for {objective.objective_type}: {objective.title}")
+        print(f"📊 Priority: {objective.priority_score}, Complexity: {objective.complexity_score}")
         
         user_profile = await self.user_repo.ensure_default_profile()
         
         # === XP CALCULATION ===
         base_xp = settings.points_per_objective if hasattr(settings, 'points_per_objective') else 100
+        print(f"💰 Base XP: {base_xp}")
         
         # Calculate XP bonuses
         complexity_bonus = int(base_xp * objective.complexity_score)
@@ -1002,6 +1041,8 @@ class GamificationService:
             type_bonus = base_xp * 2  # Main objectives give 3x total XP
         elif objective.objective_type == ObjectiveType.SUB_OBJECTIVE:
             type_bonus = base_xp * 0.5  # Sub objectives give 1.5x total XP
+            
+        print(f"🎲 Bonuses - Complexity: {complexity_bonus}, Priority: {priority_bonus}, Type: {type_bonus}")
         
         # Timeliness bonus
         timeliness_bonus = 0
@@ -1022,15 +1063,21 @@ class GamificationService:
         
         # Calculate total XP
         total_xp = int(base_xp + complexity_bonus + priority_bonus + type_bonus + timeliness_bonus)
+        print(f"💎 Total XP calculated: {total_xp}")
         
         # Apply streak multiplier
         if user_profile.current_streak_days >= 7:
             streak_multiplier = 1.0 + (user_profile.current_streak_days * 0.05)  # 5% per day
             total_xp = int(total_xp * streak_multiplier)
+            print(f"🔥 Streak multiplier applied: {streak_multiplier}, New total: {total_xp}")
         
         # === AWARD XP AND HANDLE LEVEL-UPS ===
         old_level = user_profile.level
+        print(f"👤 User profile before: Level {old_level}, XP: {user_profile.experience_points}")
+        
         levels_gained = user_profile.add_experience(total_xp)
+        print(f"🆙 Levels gained: {levels_gained}")
+        print(f"👤 User profile after: Level {user_profile.level}, XP: {user_profile.experience_points}")
         
         # Check for achievements
         unlocked_achievements = await self._check_achievements(user_profile)
@@ -1044,6 +1091,7 @@ class GamificationService:
         user_profile.overall_score += total_xp
         
         await self.user_repo.save_profile(user_profile)
+        print(f"💾 User profile saved")
         
         # === PREPARE RESPONSE ===
         response = {
@@ -1099,10 +1147,12 @@ class GamificationService:
                 coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
                 if coupon_def:
                     hours_left = (coupon.expires_at - datetime.utcnow()).total_seconds() / 3600
+                    # Use the preserved display name from the wheel, fallback to backend definition
+                    display_name = coupon.display_name or coupon_def.display_name
                     active_coupons.append({
                         "id": str(coupon.id),
                         "type": coupon.coupon_type.value,
-                        "display_name": coupon_def.display_name,
+                        "display_name": display_name,
                         "description": coupon_def.description,
                         "duration_minutes": coupon_def.duration_minutes,
                         "rarity": coupon_def.rarity,
@@ -1125,4 +1175,103 @@ class GamificationService:
     
     async def get_coupon_definitions(self) -> List[CouponDefinition]:
         """Get all available coupon definitions for the frontend."""
-        return self._coupon_definitions 
+        return self._coupon_definitions
+    
+    def _calculate_luck_boost(self, user_profile: UserProfile) -> float:
+        """Calculate luck boost based on user's luck factor and recent activity."""
+        base_luck = user_profile.luck_factor
+        
+        # Streak bonus: longer streaks increase luck
+        streak_bonus = min(user_profile.current_streak_days * 0.1, 0.5)  # Max 50% boost
+        
+        # Recent activity bonus: more active users get slight luck boost
+        activity_bonus = 0.0
+        if user_profile.daily_tasks_completed_today >= user_profile.daily_task_goal:
+            activity_bonus = 0.2  # 20% boost for completing daily goal
+        
+        # Comeback bonus: users who haven't been active get a luck boost
+        comeback_bonus = 0.0
+        if user_profile.comeback_bonus_available:
+            comeback_bonus = 0.3  # 30% boost for comeback
+            # Reset comeback bonus after use
+            user_profile.comeback_bonus_available = False
+        
+        # Level bonus: higher level users get slightly better luck
+        level_bonus = min(user_profile.level * 0.02, 0.2)  # Max 20% boost
+        
+        total_luck = base_luck + streak_bonus + activity_bonus + comeback_bonus + level_bonus
+        
+        # Cap the luck boost at 2.0x (100% increase)
+        return min(total_luck, 2.0)
+    
+    def _apply_luck_to_legacy_roll(self, base_roll: float, luck_boost: float) -> float:
+        """Apply luck boost to legacy random roll system."""
+        if luck_boost <= 1.0:
+            return base_roll
+        
+        # Higher luck makes the roll "better" (lower for better rewards)
+        # Formula: adjusted_roll = base_roll / luck_boost
+        adjusted_roll = base_roll / luck_boost
+        
+        # Ensure we don't go below 0
+        return max(0.0, adjusted_roll)
+    
+    def _get_default_tier_config(self, tier_name: str) -> Dict[str, Any]:
+        """Get default configuration for a reward tier."""
+        default_configs = {
+            "LEGENDARY": {
+                "segments": [
+                    {"name": "🎮 Gaming Marathon", "type": "game_marathon", "duration": 180, "weight": 1},
+                    {"name": "🍕 Food Festival", "type": "food_festival", "duration": 120, "weight": 1},
+                ]
+            },
+            "EPIC": {
+                "segments": [
+                    {"name": "🎵 Music Session", "type": "music_session", "duration": 90, "weight": 2},
+                    {"name": "📱 Social Media", "type": "social_media", "duration": 60, "weight": 2},
+                ]
+            },
+            "RARE": {
+                "segments": [
+                    {"name": "📺 YouTube", "type": "watch_youtube", "duration": 45, "weight": 3},
+                    {"name": "📱 Instagram", "type": "scroll_instagram", "duration": 30, "weight": 3},
+                ]
+            },
+            "COMMON": {
+                "segments": [
+                    {"name": "☕ Coffee Break", "type": "coffee_break", "duration": 15, "weight": 3},
+                    {"name": "📖 Quick Read", "type": "quick_read", "duration": 20, "weight": 2},
+                ]
+            },
+            "NO_REWARD": {
+                "segments": [
+                    {"name": "📦 Empty Box", "type": "no_reward", "duration": 0, "weight": 1},
+                ]
+            }
+        }
+        
+        return default_configs.get(tier_name, default_configs["COMMON"])
+    
+    def _get_default_segment_for_tier(self, tier_name: str) -> Dict[str, Any]:
+        """Get a default segment for a reward tier."""
+        tier_config = self._get_default_tier_config(tier_name)
+        segments = tier_config.get("segments", [])
+        
+        if segments:
+            # Weighted random selection from default segments
+            total_weight = sum(seg.get('weight', 1) for seg in segments)
+            segment_roll = random.random() * total_weight
+            cumulative_weight = 0
+            
+            for segment in segments:
+                cumulative_weight += segment.get('weight', 1)
+                if segment_roll <= cumulative_weight:
+                    return segment
+            
+            # Fallback to first segment
+            return segments[0]
+        else:
+            # Ultimate fallback
+            return {"name": "☕ Coffee Break", "type": "coffee_break", "duration": 15, "weight": 1}
+    
+ 

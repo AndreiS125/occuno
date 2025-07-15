@@ -3,14 +3,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from uuid import UUID
 
-from repositories.user_profile_repository import UserProfileRepository
+from repositories.sqlite_user_profile_repository import SQLiteUserProfileRepository
 from services.gamification_service import GamificationService
 
 router = APIRouter(tags=["user"])
 
-# Dependency injection
+# Dependency injection - fixed to use SQLite version
 def get_user_repo():
-    return UserProfileRepository()
+    return SQLiteUserProfileRepository()
 
 def get_gamification_service():
     return GamificationService()
@@ -58,6 +58,7 @@ class MysteryBoxResponse(BaseModel):
     celebration: Optional[str] = None
     message: Optional[str] = None
     wheel_result: Optional[Dict[str, Any]] = None
+    backend_selection: Optional[Dict[str, Any]] = None  # NEW: Backend selection for frontend wheel
 
 class DailyStatusResponse(BaseModel):
     current_coupons: int
@@ -147,7 +148,7 @@ class MysteryBoxRequest(BaseModel):
 
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_user_profile(
-    user_repo: UserProfileRepository = Depends(get_user_repo)
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
 ):
     """Get the current user's profile."""
     profile = await user_repo.ensure_default_profile()
@@ -170,7 +171,7 @@ async def get_user_profile(
 @router.put("/preferences")
 async def update_preferences(
     request: UpdatePreferencesRequest,
-    user_repo: UserProfileRepository = Depends(get_user_repo)
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
 ):
     """Update user preferences."""
     # Get the current profile
@@ -211,7 +212,7 @@ async def update_preferences(
 
 @router.get("/gamification/stats", response_model=EnhancedGamificationStatsResponse)
 async def get_enhanced_gamification_stats(
-    user_repo: UserProfileRepository = Depends(get_user_repo)
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
 ):
     """Get comprehensive gamification statistics with coupon system."""
     profile = await user_repo.ensure_default_profile()
@@ -383,7 +384,7 @@ async def get_coupon_definitions(
 
 @router.get("/gamification/legacy-stats")
 async def get_gamification_stats(
-    user_repo: UserProfileRepository = Depends(get_user_repo),
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Get detailed gamification statistics (legacy endpoint with coupon support)."""
@@ -447,3 +448,215 @@ async def get_achievement_definitions(
         }
         for ach in achievements
     ] 
+
+@router.get("/luck-status")
+async def get_luck_status(
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Get user's current luck factor and breakdown."""
+    try:
+        user_repo = SQLiteUserProfileRepository()
+        user_profile = await user_repo.ensure_default_profile()
+        
+        # Calculate current luck boost
+        luck_boost = gamification._calculate_luck_boost(user_profile)
+        
+        return {
+            "success": True,
+            "base_luck": user_profile.luck_factor,
+            "total_luck": luck_boost,
+            "luck_breakdown": {
+                "base_luck": user_profile.luck_factor,
+                "streak_bonus": min(user_profile.current_streak_days * 0.1, 0.5),
+                "level_bonus": min(user_profile.level * 0.02, 0.2),
+                "activity_bonus": 0.2 if user_profile.daily_tasks_completed_today >= user_profile.daily_task_goal else 0.0,
+                "comeback_bonus": 0.3 if user_profile.comeback_bonus_available else 0.0
+            },
+            "luck_explanation": {
+                "base_luck": "Your base luck factor (can be increased through achievements)",
+                "streak_bonus": f"Streak bonus: {user_profile.current_streak_days} days (+{min(user_profile.current_streak_days * 0.1, 0.5):.1f})",
+                "level_bonus": f"Level bonus: Level {user_profile.level} (+{min(user_profile.level * 0.02, 0.2):.1f})",
+                "activity_bonus": "Daily goal completion bonus (+0.2)" if user_profile.daily_tasks_completed_today >= user_profile.daily_task_goal else "Complete daily goal for +0.2 bonus",
+                "comeback_bonus": "Comeback bonus (+0.3)" if user_profile.comeback_bonus_available else "Available after being inactive"
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting luck status: {str(e)}")
+
+@router.post("/luck-factor")
+async def update_luck_factor(
+    request: dict,
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Update user's base luck factor (admin/achievement use)."""
+    try:
+        user_repo = SQLiteUserProfileRepository()
+        user_profile = await user_repo.ensure_default_profile()
+        
+        new_luck_factor = request.get("luck_factor", user_profile.luck_factor)
+        
+        # Validate luck factor range
+        if new_luck_factor < 0.1 or new_luck_factor > 3.0:
+            raise HTTPException(status_code=400, detail="Luck factor must be between 0.1 and 3.0")
+        
+        user_profile.luck_factor = new_luck_factor
+        await user_repo.save_profile(user_profile)
+        
+        return {
+            "success": True,
+            "message": f"Luck factor updated to {new_luck_factor:.2f}",
+            "new_luck_factor": new_luck_factor
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating luck factor: {str(e)}") 
+
+@router.get("/reward-config")
+async def get_reward_configuration(
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+):
+    """Get user's custom reward configuration."""
+    try:
+        profile = await user_repo.ensure_default_profile()
+        
+        if profile.custom_reward_config and profile.use_custom_rewards:
+            return {
+                "success": True,
+                "has_custom_config": True,
+                "config": profile.custom_reward_config.dict(),
+                "is_active": profile.use_custom_rewards
+            }
+        else:
+            return {
+                "success": True,
+                "has_custom_config": False,
+                "config": None,
+                "is_active": False,
+                "default_config": {
+                    "tiers": [
+                        {
+                            "tier_name": "NO_REWARD",
+                            "probability": 0.50,
+                            "description": "50% chance of no reward"
+                        },
+                        {
+                            "tier_name": "COMMON",
+                            "probability": 0.30,
+                            "description": "30% chance of common rewards"
+                        },
+                        {
+                            "tier_name": "RARE",
+                            "probability": 0.15,
+                            "description": "15% chance of rare rewards"
+                        },
+                        {
+                            "tier_name": "EPIC",
+                            "probability": 0.04,
+                            "description": "4% chance of epic rewards"
+                        },
+                        {
+                            "tier_name": "LEGENDARY",
+                            "probability": 0.01,
+                            "description": "1% chance of legendary rewards"
+                        }
+                    ]
+                }
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting reward config: {str(e)}")
+
+@router.post("/reward-config")
+async def save_reward_configuration(
+    request: dict,
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+):
+    """Save user's custom reward configuration."""
+    try:
+        profile = await user_repo.ensure_default_profile()
+        
+        from domain.models import CustomRewardConfiguration, CustomRewardTier
+        
+        # Parse the custom configuration from request
+        config_data = request.get("config", {})
+        
+        custom_config = CustomRewardConfiguration(
+            user_id=profile.id,
+            configuration_name=config_data.get("name", "My Custom Wheel"),
+            reward_tiers=[
+                CustomRewardTier(
+                    tier_name=tier["tier_name"],
+                    probability=tier["probability"],
+                    colors=tier.get("colors", []),
+                    glow_color=tier.get("glow_color", "#22c5c2"),
+                    segments=tier.get("segments", [])
+                )
+                for tier in config_data.get("tiers", [])
+            ]
+        )
+        
+        # Validate probabilities sum to 1.0
+        total_prob = sum(tier.probability for tier in custom_config.reward_tiers)
+        if abs(total_prob - 1.0) > 0.01:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Probabilities must sum to 1.0 (currently {total_prob:.3f})"
+            )
+        
+        profile.custom_reward_config = custom_config
+        profile.use_custom_rewards = request.get("use_custom_rewards", True)
+        
+        await user_repo.save_profile(profile)
+        
+        return {
+            "success": True,
+            "message": "Custom reward configuration saved successfully",
+            "config": custom_config.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving reward config: {str(e)}")
+
+@router.delete("/reward-config")
+async def delete_reward_configuration(
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+):
+    """Delete user's custom reward configuration and revert to default."""
+    try:
+        profile = await user_repo.ensure_default_profile()
+        
+        profile.custom_reward_config = None
+        profile.use_custom_rewards = False
+        
+        await user_repo.save_profile(profile)
+        
+        return {
+            "success": True,
+            "message": "Custom reward configuration deleted. Reverted to default configuration."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting reward config: {str(e)}")
+
+@router.post("/reward-config/toggle")
+async def toggle_reward_configuration(
+    request: dict,
+    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+):
+    """Toggle between custom and default reward configuration."""
+    try:
+        profile = await user_repo.ensure_default_profile()
+        
+        if not profile.custom_reward_config:
+            raise HTTPException(
+                status_code=400, 
+                detail="No custom reward configuration exists. Create one first."
+            )
+        
+        profile.use_custom_rewards = request.get("use_custom_rewards", not profile.use_custom_rewards)
+        
+        await user_repo.save_profile(profile)
+        
+        return {
+            "success": True,
+            "message": f"Switched to {'custom' if profile.use_custom_rewards else 'default'} reward configuration",
+            "is_using_custom": profile.use_custom_rewards
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error toggling reward config: {str(e)}") 

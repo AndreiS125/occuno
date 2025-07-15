@@ -47,6 +47,7 @@ class CouponDefinition(BaseModel):
 class EarnedCoupon(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     coupon_type: CouponType
+    display_name: Optional[str] = None  # Preserve the exact name shown on the wheel
     earned_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: datetime  # Same day expiration
     used_at: Optional[datetime] = None
@@ -68,6 +69,24 @@ class AchievementDefinition(BaseModel):
 class UserAchievement(BaseModel):
     achievement_id: str  # Changed from UUID to str to match AchievementDefinition.id
     unlocked_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CustomRewardTier(BaseModel):
+    """User-defined reward tier with custom segments and probabilities."""
+    tier_name: str
+    probability: float  # 0.0 to 1.0
+    colors: List[Dict[str, str]]  # List of color gradients
+    glow_color: str
+    segments: List[Dict[str, Any]]  # List of segment definitions
+
+class CustomRewardConfiguration(BaseModel):
+    """User's custom reward wheel configuration."""
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    configuration_name: str = "My Custom Wheel"
+    is_active: bool = True
+    reward_tiers: List[CustomRewardTier] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserProfile(BaseModel):
     id: UUID = Field(default_factory=uuid4)
@@ -121,6 +140,10 @@ class UserProfile(BaseModel):
     bonus_multiplier_active: bool = False
     bonus_multiplier_value: float = 1.0
     bonus_multiplier_expires: Optional[datetime] = None
+    
+    # Custom Reward Configuration
+    custom_reward_config: Optional[CustomRewardConfiguration] = None
+    use_custom_rewards: bool = False  # Whether to use custom config or default
     
     # Progress Tracking
     daily_tasks_completed_today: int = 0
@@ -256,6 +279,7 @@ class Task(BaseObjective):
         if isinstance(v, timedelta):
             return v
         return v
+
 
 # --- Data Store Structure ---
 class DataStore(BaseModel):

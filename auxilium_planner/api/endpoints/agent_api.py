@@ -21,9 +21,9 @@ from core.logging_config import get_logger
 logger = get_logger("agent_api")
 router = APIRouter(tags=["agent"])
 
-# Global agent instances
-agent_graph: Optional[AgentGraph] = None
-single_agent_graph: Optional[SingleAgentGraph] = None
+# Global agent instances (using string annotations for forward reference)
+agent_graph: Optional['StreamingAgentGraph'] = None
+single_agent_graph: Optional['StreamingSingleAgentGraph'] = None
 
 
 class ChatRequest(BaseModel):
@@ -55,6 +55,40 @@ class ThreadResponse(BaseModel):
     message: str
 
 
+class EditMessageRequest(BaseModel):
+    """Request model for editing messages"""
+    thread_id: str = Field(..., description="Thread ID containing the message to edit")
+    exchange_id: str = Field(..., description="Exchange ID of the message to edit")
+    new_message: str = Field(..., description="New message content")
+
+
+class EditMessageResponse(BaseModel):
+    """Response model for editing messages"""
+    success: bool
+    message: str
+    thread_id: str
+    exchange_id: str
+
+
+class StopExecutionRequest(BaseModel):
+    """Request model for stopping execution"""
+    execution_id: str = Field(..., description="Execution ID to stop")
+
+
+class StopExecutionResponse(BaseModel):
+    """Response model for stopping execution"""
+    success: bool
+    message: str
+    execution_id: str
+
+
+class RerunFromMessageRequest(BaseModel):
+    """Request model for rerunning from message"""
+    thread_id: str = Field(..., description="Thread ID to rerun from")
+    include_thoughts: bool = Field(True, description="Include AI thinking process")
+    include_tool_details: bool = Field(True, description="Include detailed tool information")
+
+
 class StreamingAgentGraph(AgentGraph):
     """Enhanced AgentGraph with streaming capabilities"""
     
@@ -71,6 +105,11 @@ class StreamingAgentGraph(AgentGraph):
         
         # Store tool calls to associate with results
         self.pending_tool_calls = {}  # tool_call_id -> {tool_name, tool_args, agent}
+        
+        # Stop execution support
+        self.stop_requested = False
+        self.stop_lock = asyncio.Lock()
+        self.active_executions = {}  # execution_id -> {thread_id, exchange_id, stop_event}
     
     async def emit_event(self, event: Dict[str, Any]):
         """Emit a streaming event"""
@@ -91,6 +130,41 @@ class StreamingAgentGraph(AgentGraph):
                     event.get('content', ''),
                     event
                 )
+    
+    async def request_stop(self, execution_id: str) -> bool:
+        """Request to stop a specific execution"""
+        async with self.stop_lock:
+            if execution_id in self.active_executions:
+                execution_info = self.active_executions[execution_id]
+                execution_info['stop_event'].set()
+                
+                # Emit stop event
+                await self.emit_event({
+                    'type': 'execution_stop_requested',
+                    'execution_id': execution_id,
+                    'thread_id': execution_info['thread_id'],
+                    'exchange_id': execution_info['exchange_id']
+                })
+                
+                logger.info(f"🛑 Stop requested for execution {execution_id}")
+                return True
+            else:
+                logger.warning(f"❌ Execution {execution_id} not found in active executions")
+                return False
+    
+    async def check_stop_requested(self) -> bool:
+        """Check if stop has been requested for current execution"""
+        if self.current_execution_id in self.active_executions:
+            execution_info = self.active_executions[self.current_execution_id]
+            return execution_info['stop_event'].is_set()
+        return False
+    
+    async def cleanup_execution(self, execution_id: str):
+        """Clean up execution tracking"""
+        async with self.stop_lock:
+            if execution_id in self.active_executions:
+                del self.active_executions[execution_id]
+                logger.info(f"🧹 Cleaned up execution {execution_id}")
     
     async def process_user_input_streaming(self, user_input: str, thread_id: Optional[str] = None):
         """Process user input with streaming events"""
@@ -113,6 +187,17 @@ class StreamingAgentGraph(AgentGraph):
             exchange_id = await self.memory_system.start_new_exchange(thread_id, user_input)
             self.current_exchange_id = exchange_id
             
+            # Register this execution for stop requests
+            stop_event = asyncio.Event()
+            async with self.stop_lock:
+                self.active_executions[self.current_execution_id] = {
+                    'thread_id': thread_id,
+                    'exchange_id': exchange_id,
+                    'stop_event': stop_event
+                }
+                logger.info(f"📝 Registered execution {self.current_execution_id} for stopping")
+                logger.info(f"📝 Active executions now: {list(self.active_executions.keys())}")
+            
             # Emit start event
             await self.emit_event({
                 'type': 'execution_start',
@@ -132,8 +217,22 @@ class StreamingAgentGraph(AgentGraph):
             # Override the node methods to capture original thinking content
             self._setup_streaming_overrides()
             
-            # Start processing with streaming
+            # Start processing with streaming and stop checks
             final_response = await self._process_with_streaming(user_input, thread_id)
+            
+            # Check if execution was stopped
+            if await self.check_stop_requested():
+                logger.info("🛑 Execution was stopped by user request")
+                await self.emit_event({
+                    'type': 'execution_stopped',
+                    'thread_id': thread_id,
+                    'exchange_id': exchange_id,
+                    'partial_response': final_response
+                })
+                # Still store partial response in memory
+                await self.memory_system.set_final_response(thread_id, exchange_id, f"[EXECUTION STOPPED] {final_response}")
+                return final_response
+            
             logger.info(f"✅ StreamingAgentGraph: Processing complete, final response: {final_response[:100]}...")
             
             # Store final response in memory
@@ -174,6 +273,9 @@ class StreamingAgentGraph(AgentGraph):
             self.streaming_active = False
             self.pending_tool_calls = {}
             self._restore_original_methods()
+            # Clean up execution tracking
+            if hasattr(self, 'current_execution_id') and self.current_execution_id:
+                await self.cleanup_execution(self.current_execution_id)
     
     async def _process_with_streaming(self, user_input: str, thread_id: str) -> str:
         """Process the user input with detailed streaming events"""
@@ -195,6 +297,16 @@ class StreamingAgentGraph(AgentGraph):
         # Stream execution with detailed events
         final_state = None
         async for chunk in self.graph.astream(initial_state, config):
+            # Check if stop was requested
+            if await self.check_stop_requested():
+                logger.info("🛑 Stopping execution due to user request")
+                await self.emit_event({
+                    'type': 'execution_stopping',
+                    'thread_id': thread_id,
+                    'reason': 'user_request'
+                })
+                break
+            
             await self._emit_chunk_events(chunk)
             # Keep track of the final state
             final_state = chunk
@@ -583,8 +695,10 @@ def get_streaming_agent_graph() -> StreamingAgentGraph:
     Returns:
         StreamingAgentGraph instance
     """
-    # Always create a new instance for streaming to avoid conflicts
-    return StreamingAgentGraph()
+    global agent_graph
+    if agent_graph is None:
+        agent_graph = StreamingAgentGraph()
+    return agent_graph
 
 
 def get_streaming_single_agent_graph() -> StreamingSingleAgentGraph:
@@ -594,8 +708,10 @@ def get_streaming_single_agent_graph() -> StreamingSingleAgentGraph:
     Returns:
         StreamingSingleAgentGraph instance
     """
-    # Always create a new instance for streaming to avoid conflicts
-    return StreamingSingleAgentGraph()
+    global single_agent_graph
+    if single_agent_graph is None:
+        single_agent_graph = StreamingSingleAgentGraph()
+    return single_agent_graph
 
 
 @router.post("/chat/stream")
@@ -1080,37 +1196,66 @@ async def list_conversation_threads() -> Dict[str, Any]:
     """
     try:
         memory_system = MemorySystem()
-        data = memory_system._load_memory_data()
         
+        # Get conversation statistics from SQLite
+        stats = await memory_system.get_stats()
+        
+        # Get all conversation threads from SQLite
+        from core.database import db_manager
         threads = []
-        for thread_id, thread_data in data.items():
-            exchanges = thread_data.get('exchanges', [])
-            last_updated = thread_data.get('last_updated', 'Unknown')
-            created_at = thread_data.get('created_at', 'Unknown')
-            
-            # Get the latest exchange for preview
-            latest_exchange = None
-            if exchanges:
-                latest_exchange = exchanges[-1]
-            
-            thread_info = {
-                "id": thread_id,
-                "created_at": created_at,
-                "last_updated": last_updated,
-                "message_count": len(exchanges),
-                "latest_message": latest_exchange.get('user_message', '') if latest_exchange else '',
-                "latest_response": latest_exchange.get('executor_summary', latest_exchange.get('planner_summary', '')) if latest_exchange else '',
-                "title": latest_exchange.get('user_message', 'New Conversation')[:50] + '...' if latest_exchange and len(latest_exchange.get('user_message', '')) > 50 else latest_exchange.get('user_message', 'New Conversation') if latest_exchange else 'Empty Conversation'
-            }
-            threads.append(thread_info)
         
-        # Sort by last_updated (most recent first)
-        threads.sort(key=lambda x: x['last_updated'], reverse=True)
+        async with db_manager.get_connection() as conn:
+            cursor = await conn.execute("""
+                SELECT ct.thread_id, ct.created_at, ct.last_updated,
+                       COUNT(ce.id) as message_count,
+                       MAX(ce.timestamp) as latest_exchange_time
+                FROM conversation_threads ct
+                LEFT JOIN conversation_exchanges ce ON ct.thread_id = ce.thread_id
+                GROUP BY ct.thread_id, ct.created_at, ct.last_updated
+                ORDER BY MAX(ce.timestamp) DESC, ct.last_updated DESC
+            """)
+            
+            thread_rows = await cursor.fetchall()
+            
+            for thread_row in thread_rows:
+                thread_id = thread_row['thread_id']
+                
+                # Get latest exchange for preview
+                latest_cursor = await conn.execute("""
+                    SELECT user_message, final_response, planner_summary, executor_summary
+                    FROM conversation_exchanges
+                    WHERE thread_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """, (thread_id,))
+                
+                latest_exchange = await latest_cursor.fetchone()
+                
+                # Create thread info
+                latest_message = latest_exchange['user_message'] if latest_exchange else ''
+                latest_response = ''
+                if latest_exchange:
+                    latest_response = (latest_exchange['final_response'] or 
+                                     latest_exchange['executor_summary'] or 
+                                     latest_exchange['planner_summary'] or '')
+                
+                thread_info = {
+                    "id": thread_id,
+                    "created_at": thread_row['created_at'],
+                    "last_updated": thread_row['last_updated'],
+                    "message_count": thread_row['message_count'],
+                    "latest_message": latest_message,
+                    "latest_response": latest_response,
+                    "title": (latest_message[:50] + '...' if len(latest_message) > 50 
+                             else latest_message) if latest_message else 'Empty Conversation'
+                }
+                threads.append(thread_info)
         
         return {
             "success": True,
             "threads": threads,
-            "total_count": len(threads)
+            "total_count": len(threads),
+            "stats": stats
         }
     
     except Exception as e:
@@ -1226,4 +1371,318 @@ async def initialize_agent_systems(background_tasks: BackgroundTasks) -> Dict[st
         raise HTTPException(
             status_code=500,
             detail=f"Failed to initialize agent systems: {str(e)}"
+        )
+
+
+@router.post("/edit-message", response_model=EditMessageResponse)
+async def edit_message(request: EditMessageRequest) -> EditMessageResponse:
+    """
+    Edit a message in the conversation and truncate history after that point.
+    """
+    try:
+        logger.info(f"📝 Editing message in thread {request.thread_id}, exchange {request.exchange_id}")
+        
+        # Use the memory system to edit the message
+        memory_system = MemorySystem()
+        success = await memory_system.edit_message_and_truncate(
+            request.thread_id,
+            request.exchange_id,
+            request.new_message
+        )
+        
+        if success:
+            return EditMessageResponse(
+                success=True,
+                message="Message edited successfully and conversation history truncated",
+                thread_id=request.thread_id,
+                exchange_id=request.exchange_id
+            )
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="Exchange not found or edit failed"
+            )
+    
+    except Exception as e:
+        logger.error(f"❌ Error editing message: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to edit message: {str(e)}"
+        )
+
+
+@router.post("/rerun-from-message", response_model=ChatResponse)
+async def rerun_from_message(request: ChatRequest) -> ChatResponse:
+    """
+    Re-run the conversation from a specific message.
+    This endpoint uses the existing chat logic but with a thread that has been truncated.
+    """
+    try:
+        logger.info(f"🔄 Re-running conversation from message in thread {request.thread_id}")
+        
+        # Initialize the default agent graph (multi-agent system)
+        global agent_graph
+        if agent_graph is None:
+            agent_graph = AgentGraph()
+        
+        # Get the last exchange from the thread (which should be the edited one)
+        memory_system = MemorySystem()
+        current_exchange = await memory_system.get_current_exchange(request.thread_id)
+        
+        if not current_exchange:
+            raise HTTPException(
+                status_code=404,
+                detail="No exchange found in the thread"
+            )
+        
+        # Process the edited message
+        final_response = await agent_graph.process_user_input(
+            current_exchange.user_message,
+            request.thread_id
+        )
+        
+        return ChatResponse(
+            response=final_response,
+            thread_id=request.thread_id,
+            agent_used="multi-agent",
+            success=True
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Error re-running from message: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to re-run from message: {str(e)}"
+        )
+
+
+@router.post("/rerun-from-message/stream")
+async def rerun_from_message_stream(request: RerunFromMessageRequest):
+    """
+    Re-run the conversation from a specific message with streaming.
+    """
+    try:
+        logger.info(f"🔄 Re-running conversation with streaming from thread {request.thread_id}")
+        logger.info(f"🔄 Request details: include_thoughts={request.include_thoughts}, include_tool_details={request.include_tool_details}")
+        
+        # Initialize the streaming agent graph (multi-agent system)
+        streaming_agent = get_streaming_agent_graph()
+        
+        # Get the last exchange from the thread (which should be the edited one)
+        memory_system = MemorySystem()
+        current_exchange = await memory_system.get_current_exchange(request.thread_id)
+        
+        logger.info(f"🔄 Current exchange: {current_exchange.id if current_exchange else 'None'}")
+        if current_exchange:
+            logger.info(f"🔄 Exchange message: {current_exchange.user_message[:100]}...")
+        
+        if not current_exchange:
+            raise HTTPException(
+                status_code=404,
+                detail="No exchange found in the thread"
+            )
+        
+        # Process the edited message with streaming
+        async def event_stream():
+            try:
+                # Start processing in background
+                processing_task = asyncio.create_task(
+                    streaming_agent.process_user_input_streaming(
+                        current_exchange.user_message,
+                        request.thread_id
+                    )
+                )
+                
+                # Stream events
+                while True:
+                    try:
+                        # Wait for events with timeout
+                        event = await asyncio.wait_for(
+                            streaming_agent.event_queue.get(),
+                            timeout=1.0
+                        )
+                        
+                        yield f"data: {json.dumps(event)}\n\n"
+                        
+                        # Check if processing is done
+                        if event.get('type') == 'execution_complete' or event.get('type') == 'execution_error':
+                            break
+                        
+                    except asyncio.TimeoutError:
+                        # Send heartbeat
+                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+                        
+                        # Check if processing task is done
+                        if processing_task.done():
+                            break
+                
+                # Ensure task is completed
+                await processing_task
+                
+            except Exception as e:
+                logger.error(f"❌ Error in streaming rerun: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Error in streaming rerun setup: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to setup streaming rerun: {str(e)}"
+        )
+
+
+@router.post("/stop-execution", response_model=StopExecutionResponse)
+async def stop_execution(request: StopExecutionRequest) -> StopExecutionResponse:
+    """
+    Stop an active execution.
+    """
+    try:
+        logger.info(f"🛑 Stopping execution {request.execution_id}")
+        
+        # Try to stop in both agent systems
+        success = False
+        
+        # Check multi-agent system
+        global agent_graph
+        if agent_graph and hasattr(agent_graph, 'request_stop'):
+            try:
+                if isinstance(agent_graph, StreamingAgentGraph):
+                    logger.info(f"🔍 Checking multi-agent system for execution {request.execution_id}")
+                    logger.info(f"🔍 Active executions: {list(agent_graph.active_executions.keys())}")
+                    success = await agent_graph.request_stop(request.execution_id)
+            except Exception as e:
+                logger.warning(f"Failed to stop in multi-agent system: {e}")
+        else:
+            logger.info(f"🔍 Multi-agent system not available or no request_stop method")
+        
+        # Check single-agent system
+        global single_agent_graph
+        if single_agent_graph and hasattr(single_agent_graph, 'request_stop'):
+            try:
+                if isinstance(single_agent_graph, StreamingSingleAgentGraph):
+                    logger.info(f"🔍 Checking single-agent system for execution {request.execution_id}")
+                    logger.info(f"🔍 Active executions: {list(single_agent_graph.active_executions.keys())}")
+                    single_success = await single_agent_graph.request_stop(request.execution_id)
+                    success = success or single_success
+            except Exception as e:
+                logger.warning(f"Failed to stop in single-agent system: {e}")
+        else:
+            logger.info(f"🔍 Single-agent system not available or no request_stop method")
+        
+        if success:
+            return StopExecutionResponse(
+                success=True,
+                message="Execution stop requested successfully",
+                execution_id=request.execution_id
+            )
+        else:
+            logger.info(f"🔍 Execution {request.execution_id} not found in any active executions")
+            return StopExecutionResponse(
+                success=False,
+                message="Execution not found or already completed",
+                execution_id=request.execution_id
+            )
+    
+    except Exception as e:
+        logger.error(f"❌ Error stopping execution: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to stop execution: {str(e)}"
+        )
+
+
+@router.post("/rerun-from-message/single/stream")
+async def rerun_from_message_single_stream(request: RerunFromMessageRequest):
+    """
+    Re-run the conversation from a specific message with streaming using single-agent system.
+    """
+    try:
+        logger.info(f"🔄 Re-running conversation with single-agent streaming from thread {request.thread_id}")
+        logger.info(f"🔄 Request details: include_thoughts={request.include_thoughts}, include_tool_details={request.include_tool_details}")
+        
+        # Initialize the streaming single agent graph
+        streaming_single_agent = get_streaming_single_agent_graph()
+        
+        # Get the last exchange from the thread (which should be the edited one)
+        memory_system = MemorySystem()
+        current_exchange = await memory_system.get_current_exchange(request.thread_id)
+        
+        logger.info(f"🔄 Current exchange: {current_exchange.id if current_exchange else 'None'}")
+        if current_exchange:
+            logger.info(f"🔄 Exchange message: {current_exchange.user_message[:100]}...")
+        
+        if not current_exchange:
+            raise HTTPException(
+                status_code=404,
+                detail="No exchange found in the thread"
+            )
+        
+        # Process the edited message with streaming
+        async def event_stream():
+            try:
+                # Start processing in background
+                processing_task = asyncio.create_task(
+                    streaming_single_agent.process_user_input_streaming(
+                        current_exchange.user_message,
+                        request.thread_id
+                    )
+                )
+                
+                # Stream events
+                while True:
+                    try:
+                        # Wait for events with timeout
+                        event = await asyncio.wait_for(
+                            streaming_single_agent.event_queue.get(),
+                            timeout=1.0
+                        )
+                        
+                        yield f"data: {json.dumps(event)}\n\n"
+                        
+                        # Check if processing is done
+                        if event.get('type') == 'execution_complete' or event.get('type') == 'execution_error':
+                            break
+                        
+                    except asyncio.TimeoutError:
+                        # Send heartbeat
+                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+                        
+                        # Check if processing task is done
+                        if processing_task.done():
+                            break
+                
+                # Ensure task is completed
+                await processing_task
+                
+            except Exception as e:
+                logger.error(f"❌ Error in single-agent streaming rerun: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Error in single-agent streaming rerun setup: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to setup single-agent streaming rerun: {str(e)}"
         ) 

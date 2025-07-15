@@ -6,94 +6,112 @@ import { userApi } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MysteryBoxRealisticProps {
-  onOpen: () => void | Promise<any>;
+  onOpen: () => Promise<any>;
   onClose?: () => void;
   isOpen: boolean;
-  reward?: {
-    type: string;
-    value: number;
-    description: string;
-  };
-  modelPath?: string;
+  reward?: any;
 }
 
-// Define reward rarities and their configurations with website color palette
-const REWARD_CONFIGS = {
+// Add CSS for keyframe animations
+const injectCSS = () => {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes rarityBadgePulse {
+      0%, 100% { 
+        box-shadow: 0 0 20px var(--glow-color), inset 0 0 20px rgba(255, 255, 255, 0.1);
+        transform: scale(1);
+      }
+      50% { 
+        box-shadow: 0 0 40px var(--glow-color), inset 0 0 30px rgba(255, 255, 255, 0.2);
+        transform: scale(1.02);
+      }
+    }
+
+    @keyframes glassShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    @keyframes glassGlow {
+      0%, 100% { 
+        filter: drop-shadow(0 2px 8px rgba(34, 211, 238, 0.4)) brightness(1.1) contrast(1.05) saturate(1.1);
+}
+      50% { 
+        filter: drop-shadow(0 4px 16px rgba(34, 211, 238, 0.6)) brightness(1.2) contrast(1.1) saturate(1.2);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Default fallback configurations - only used if backend fails
+const DEFAULT_REWARD_CONFIGS = {
   LEGENDARY: {
     name: "LEGENDARY",
-    probability: 0.01, // 1%
+    probability: 0.01,
     colors: [
-      { start: "#22c5c2", end: "#14b8a6" }, // cyber-blue to teal
-      { start: "#f472b6", end: "#ec4899" }, // neon-pink to pink
-      { start: "#fbbf24", end: "#f59e0b" }, // amber to yellow
+      { start: "#22c5c2", end: "#14b8a6" },
+      { start: "#f472b6", end: "#ec4899" },
+      { start: "#fbbf24", end: "#f59e0b" },
     ],
     glowColor: "rgba(34, 197, 194, 0.8)",
     segments: [
       { name: "🎮 Gaming Marathon", weight: 1, type: "game_marathon", duration: 180 },
       { name: "🍕 Food Festival", weight: 1, type: "food_festival", duration: 120 },
-      { name: "🎬 Movie Marathon", weight: 1, type: "movie_marathon", duration: 240 },
     ]
   },
   EPIC: {
     name: "EPIC", 
-    probability: 0.05, // 5%
+    probability: 0.05,
     colors: [
-      { start: "#8b5cf6", end: "#7c3aed" }, // electric-purple
-      { start: "#3b82f6", end: "#2563eb" }, // blue
-      { start: "#f472b6", end: "#ec4899" }, // neon-pink
-      { start: "#22c5c2", end: "#14b8a6" }, // cyber-blue
+      { start: "#8b5cf6", end: "#7c3aed" },
+      { start: "#3b82f6", end: "#2563eb" },
+      { start: "#f472b6", end: "#ec4899" },
+      { start: "#22c5c2", end: "#14b8a6" },
     ],
     glowColor: "rgba(139, 92, 246, 0.7)",
     segments: [
       { name: "🎵 Music Session", weight: 2, type: "music_session", duration: 90 },
       { name: "📱 Social Media", weight: 2, type: "social_media", duration: 60 },
-      { name: "🎨 Creative Time", weight: 1, type: "creative_time", duration: 120 },
-      { name: "🕹️ Retro Gaming", weight: 1, type: "retro_gaming", duration: 90 },
     ]
   },
   RARE: {
     name: "RARE",
-    probability: 0.20, // 20%
+    probability: 0.20,
     colors: [
-      { start: "#3b82f6", end: "#2563eb" }, // blue
-      { start: "#22c5c2", end: "#0891b2" }, // cyber-blue to sky
-      { start: "#8b5cf6", end: "#7c3aed" }, // electric-purple
-      { start: "#06b6d4", end: "#0284c7" }, // cyan
-      { start: "#22c55e", end: "#16a34a" }, // matrix-green
+      { start: "#3b82f6", end: "#2563eb" },
+      { start: "#22c5c2", end: "#0891b2" },
+      { start: "#8b5cf6", end: "#7c3aed" },
+      { start: "#06b6d4", end: "#0284c7" },
+      { start: "#22c55e", end: "#16a34a" },
     ],
     glowColor: "rgba(59, 130, 246, 0.6)",
     segments: [
       { name: "📺 YouTube", weight: 3, type: "watch_youtube", duration: 45 },
       { name: "📱 Instagram", weight: 3, type: "scroll_instagram", duration: 30 },
-      { name: "💬 Chat Friends", weight: 2, type: "chat_friends", duration: 60 },
-      { name: "🍿 Snack Break", weight: 2, type: "snack_break", duration: 30 },
-      { name: "😴 Power Nap", weight: 1, type: "power_nap", duration: 20 },
     ]
   },
   COMMON: {
     name: "COMMON",
-    probability: 0.30, // 30%
+    probability: 0.30,
     colors: [
-      { start: "#22c55e", end: "#15803d" }, // matrix-green
-      { start: "#06b6d4", end: "#0e7490" }, // cyan
-      { start: "#3b82f6", end: "#1d4ed8" }, // blue
-      { start: "#8b5cf6", end: "#6d28d9" }, // electric-purple
-      { start: "#22c5c2", end: "#0f766e" }, // cyber-blue
+      { start: "#22c55e", end: "#15803d" },
+      { start: "#06b6d4", end: "#0e7490" },
+      { start: "#3b82f6", end: "#1d4ed8" },
+      { start: "#8b5cf6", end: "#6d28d9" },
+      { start: "#22c5c2", end: "#0f766e" },
     ],
     glowColor: "rgba(34, 197, 194, 0.5)",
     segments: [
       { name: "☕ Coffee Break", weight: 3, type: "coffee_break", duration: 15 },
       { name: "📖 Quick Read", weight: 2, type: "quick_read", duration: 20 },
-      { name: "🚶 Short Walk", weight: 2, type: "short_walk", duration: 15 },
-      { name: "🧘 Mini Meditation", weight: 2, type: "mini_meditation", duration: 10 },
-      { name: "📧 Check Email", weight: 1, type: "check_email", duration: 10 },
     ]
   },
   NO_REWARD: {
     name: "NO_REWARD",
-    probability: 0.44, // 44% 
+    probability: 0.44,
     colors: [
-      { start: "#64748b", end: "#475569" }, // slate (keep subtle for empty)
+      { start: "#64748b", end: "#475569" },
     ],
     glowColor: "rgba(100, 116, 139, 0.3)",
     segments: [
@@ -102,124 +120,58 @@ const REWARD_CONFIGS = {
   }
 };
 
-// Determine reward tier based on probabilities - sometimes returns null (no reward)
-const determineRewardTier = (): string | null => {
-  const roll = Math.random();
+// Helper function to convert backend config to frontend format
+const convertBackendToFrontendConfig = (backendConfig: any) => {
+  const frontendConfig: any = {};
   
-  // 50% chance of NO REWARD - mystery box just pops with nothing
-  if (roll < 0.50) {
-    console.log('🎯 No reward this time!', roll);
-    return null;
-  }
+  if (backendConfig.has_custom_config && backendConfig.is_active) {
+    // Use custom configuration
+    backendConfig.config.reward_tiers.forEach((tier: any) => {
+      frontendConfig[tier.tier_name] = {
+        name: tier.tier_name,
+        probability: tier.probability,
+        colors: tier.colors || DEFAULT_REWARD_CONFIGS[tier.tier_name as keyof typeof DEFAULT_REWARD_CONFIGS]?.colors || [{ start: "#22c55e", end: "#15803d" }],
+        glowColor: tier.glow_color || DEFAULT_REWARD_CONFIGS[tier.tier_name as keyof typeof DEFAULT_REWARD_CONFIGS]?.glowColor || "rgba(34, 197, 194, 0.5)",
+        segments: tier.segments || []
+      };
+    });
+  } else {
+    // Use default configuration from backend
+    backendConfig.default_config.tiers.forEach((tier: any) => {
+      const defaultTier = DEFAULT_REWARD_CONFIGS[tier.tier_name as keyof typeof DEFAULT_REWARD_CONFIGS];
+      frontendConfig[tier.tier_name] = {
+        name: tier.tier_name,
+        probability: tier.probability,
+        colors: defaultTier?.colors || [{ start: "#22c55e", end: "#15803d" }],
+        glowColor: defaultTier?.glowColor || "rgba(34, 197, 194, 0.5)",
+        segments: defaultTier?.segments || []
+      };
+    });
+      }
   
-  // Adjust probabilities for when there IS a reward (remaining 50%)
-  const rewardRoll = Math.random();
-  
-  if (rewardRoll < 0.02) { // 1% of total (2% of reward cases)
-    console.log('🎯 LEGENDARY reward!', rewardRoll);
-    return 'LEGENDARY';
-  } else if (rewardRoll < 0.10) { // 4% of total (8% of reward cases) 
-    console.log('🎯 EPIC reward!', rewardRoll);
-    return 'EPIC';
-  } else if (rewardRoll < 0.40) { // 15% of total (30% of reward cases)
-    console.log('🎯 RARE reward!', rewardRoll);
-    return 'RARE';
-  } else { // 30% of total (60% of reward cases)
-    console.log('🎯 COMMON reward!', rewardRoll);
-    return 'COMMON';
-  }
+  return frontendConfig;
 };
 
-// Add CSS animations for text effects
-if (typeof document !== 'undefined' && !document.querySelector('#wheel-text-animations')) {
-  const style = document.createElement('style');
-  style.id = 'wheel-text-animations';
-  style.textContent = `
-    @keyframes gradientShift {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    
-    @keyframes textPulse {
-      0%, 100% { transform: perspective(100px) rotateX(5deg) scale(1); }
-      50% { transform: perspective(100px) rotateX(5deg) scale(1.05); }
-    }
-    
-    @keyframes rarityGlow {
-      0%, 100% { filter: brightness(1.2) contrast(1.1); }
-      50% { filter: brightness(1.4) contrast(1.2); }
-    }
-    
-    @keyframes glassShift {
-      0% { 
-        background-position: 0% 50%;
-        filter: drop-shadow(0 2px 8px rgba(34, 211, 238, 0.4)) brightness(1.1) contrast(1.05) saturate(1.1);
+// Determine reward tier based on backend probabilities
+const determineRewardTier = (rewardConfigs: any): string => {
+  const roll = Math.random();
+  let cumulativeProbability = 0;
+  
+  // Sort tiers by probability (lowest first for proper accumulation)
+  const sortedTiers = Object.entries(rewardConfigs).sort((a: any, b: any) => a[1].probability - b[1].probability);
+  
+  for (const [tierName, config] of sortedTiers) {
+    cumulativeProbability += (config as any).probability;
+    if (roll <= cumulativeProbability) {
+      console.log(`🎯 ${tierName} reward! (roll: ${roll.toFixed(3)}, threshold: ${cumulativeProbability.toFixed(3)})`);
+      return tierName;
       }
-      25% { 
-        background-position: 100% 25%;
-        filter: drop-shadow(0 3px 12px rgba(59, 130, 246, 0.5)) brightness(1.15) contrast(1.1) saturate(1.2);
-      }
-      50% { 
-        background-position: 100% 50%;
-        filter: drop-shadow(0 4px 16px rgba(139, 92, 246, 0.4)) brightness(1.2) contrast(1.1) saturate(1.1);
-      }
-      75% { 
-        background-position: 0% 75%;
-        filter: drop-shadow(0 3px 12px rgba(34, 211, 238, 0.5)) brightness(1.15) contrast(1.1) saturate(1.2);
-      }
-      100% { 
-        background-position: 0% 50%;
-        filter: drop-shadow(0 2px 8px rgba(34, 211, 238, 0.4)) brightness(1.1) contrast(1.05) saturate(1.1);
-      }
-    }
-    
-    @keyframes glassGlow {
-      0% { 
-        text-shadow: 
-          0 0 12px rgba(34, 211, 238, 0.6),
-          0 0 24px rgba(34, 211, 238, 0.3),
-          0 1px 3px rgba(0, 0, 0, 0.3);
-      }
-      50% { 
-        text-shadow: 
-          0 0 16px rgba(34, 211, 238, 0.8),
-          0 0 32px rgba(34, 211, 238, 0.4),
-          0 1px 3px rgba(0, 0, 0, 0.3),
-          0 0 8px rgba(255, 255, 255, 0.2);
-      }
-      100% { 
-        text-shadow: 
-          0 0 12px rgba(34, 211, 238, 0.6),
-          0 0 24px rgba(34, 211, 238, 0.3),
-          0 1px 3px rgba(0, 0, 0, 0.3);
-      }
-    }
-    
-    @keyframes pulsatingAura {
-      0%, 100% { 
-        transform: scale(1);
-        opacity: 0.6;
-      }
-      50% { 
-        transform: scale(1.1);
-        opacity: 0.9;
-      }
-    }
-    
-    @keyframes rarityBadgePulse {
-      0%, 100% { 
-        transform: scale(1);
-        filter: brightness(1.2) contrast(1.1);
-      }
-      50% { 
-        transform: scale(1.05);
-        filter: brightness(1.4) contrast(1.2);
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
+  }
+  
+  // Fallback to NO_REWARD if something goes wrong
+  console.log('🎯 Fallback to NO_REWARD');
+  return 'NO_REWARD';
+};
 
 // Coupon Wheel Component - Variable Rewards with Rarities
 const CouponWheel: React.FC<{
@@ -228,6 +180,8 @@ const CouponWheel: React.FC<{
   autoStart?: boolean;
   onChoiceMade?: (choice: any) => void;
   rewardTier?: string;
+  rewardConfigs?: any; // Backend configuration
+  backendSelection?: any; // NEW: Backend selection to determine where wheel lands
   result?: {
     coupons_earned: number;
     coupon_descriptions: string[];
@@ -238,7 +192,7 @@ const CouponWheel: React.FC<{
       all_coupon_types: string[];
     };
   };
-}> = ({ onSpin, isSpinning, autoStart = false, onChoiceMade, rewardTier, result }) => {
+}> = ({ onSpin, isSpinning, autoStart = false, onChoiceMade, rewardTier, rewardConfigs, backendSelection, result }) => {
   const [animationState, setAnimationState] = useState<'idle' | 'fast-spin' | 'final-spin'>('idle');
   const [finalRotation, setFinalRotation] = useState(0);
   const [currentRotation, setCurrentRotation] = useState(0);
@@ -248,14 +202,14 @@ const CouponWheel: React.FC<{
   const wheelResetTriggered = useRef(false);
   const autoStartTriggered = useRef(false);
 
-  // Get reward configuration based on tier
-  const rewardConfig = REWARD_CONFIGS[rewardTier as keyof typeof REWARD_CONFIGS] || REWARD_CONFIGS.COMMON;
+  // Get reward configuration based on tier - use backend config if available
+  const rewardConfig = rewardConfigs?.[rewardTier as string] || DEFAULT_REWARD_CONFIGS[rewardTier as keyof typeof DEFAULT_REWARD_CONFIGS] || DEFAULT_REWARD_CONFIGS.COMMON;
   
   // Calculate total weight for proportional segments
-  const totalWeight = rewardConfig.segments.reduce((sum, seg) => sum + seg.weight, 0);
+  const totalWeight = rewardConfig.segments.reduce((sum: number, seg: any) => sum + seg.weight, 0);
   
   // Create segments with variable sizes based on weights
-  const segments = rewardConfig.segments.map((segment, index) => ({
+  const segments = rewardConfig.segments.map((segment: any, index: number) => ({
     ...segment,
     color: rewardConfig.colors[index % rewardConfig.colors.length].start,
     rarity: rewardConfig.name.toLowerCase(),
@@ -265,7 +219,7 @@ const CouponWheel: React.FC<{
 
   // Calculate start angles for each segment
   let currentAngle = 0;
-  segments.forEach(segment => {
+  segments.forEach((segment: any) => {
     segment.startAngle = currentAngle;
     currentAngle += segment.angleSize;
   });
@@ -350,10 +304,32 @@ const CouponWheel: React.FC<{
     if (animationState === 'final-spin' && finalRotation === 0 && wheelRef.current) {
       console.log('🎯 Calculating final rotation for final spin');
       
-      // Frontend decides the reward - pick random segment weighted by their sizes
+      // === NEW: Use backend selection instead of frontend random selection ===
+      let targetSegmentIndex = 0;
+      let targetSegment = segments[0]; // Default fallback
+      
+      if (backendSelection && backendSelection.segment) {
+        // Find the segment that matches the backend selection
+        const selectedSegment = backendSelection.segment;
+        const matchIndex = segments.findIndex((seg: any) => 
+          seg.type === selectedSegment.type || 
+          seg.name === selectedSegment.name
+        );
+        
+        if (matchIndex !== -1) {
+          targetSegmentIndex = matchIndex;
+          targetSegment = segments[matchIndex];
+          console.log('🎯 Backend selected segment:', targetSegment.name, 'at index', targetSegmentIndex);
+        } else {
+          console.warn('🚨 Backend selection not found in segments, using first segment as fallback');
+          targetSegmentIndex = 0;
+          targetSegment = segments[0];
+        }
+      } else {
+        console.warn('🚨 No backend selection provided, using fallback random selection');
+        // Fallback to random selection if no backend selection
       const randomValue = Math.random();
       let cumulativeWeight = 0;
-      let targetSegmentIndex = 0;
       
       for (let i = 0; i < segments.length; i++) {
         cumulativeWeight += segments[i].weight / totalWeight;
@@ -361,9 +337,9 @@ const CouponWheel: React.FC<{
           targetSegmentIndex = i;
           break;
         }
+        }
+        targetSegment = segments[targetSegmentIndex];
       }
-      
-      const targetSegment = segments[targetSegmentIndex];
       
       // IMPROVED RANDOMNESS: Add much more variance to final position
       const randomFullSpins = Math.floor(4 + Math.random() * 6); // 4-9 spins instead of 3-5
@@ -383,13 +359,14 @@ const CouponWheel: React.FC<{
       
       setFinalRotation(finalAngle);
       
-      // Store the frontend decision for the backend call
+      // Store the wheel result (using backend selection)
       const choice = {
         coupon_type: targetSegment.type,
         display_name: targetSegment.name.trim(),
         segment_index: targetSegmentIndex,
         final_angle: finalAngle,
-        random_offset: randomOffset
+        random_offset: randomOffset,
+        backend_selected: true // Mark as backend selected
       };
       
       if (result) {
@@ -397,7 +374,7 @@ const CouponWheel: React.FC<{
       }
       
       onChoiceMade?.(choice);
-      console.log(`🎯 Frontend chose: ${targetSegment.name} (index: ${targetSegmentIndex}, angle: ${finalAngle.toFixed(1)}°, offset: ${randomOffset.toFixed(1)}°)`);
+      console.log(`🎯 Wheel landing on backend selection: ${targetSegment.name} (index: ${targetSegmentIndex}, angle: ${finalAngle.toFixed(1)}°, offset: ${randomOffset.toFixed(1)}°)`);
       
       // Animate to final position with improved easing
       gsap.to(wheelRef.current, {
@@ -411,7 +388,7 @@ const CouponWheel: React.FC<{
         }
       });
     }
-  }, [animationState, finalRotation, currentRotation, result, segments, onChoiceMade, totalWeight]);
+  }, [animationState, finalRotation, currentRotation, result, segments, onChoiceMade, totalWeight, backendSelection]);
 
   // Glow animation - PERFORMANCE OPTIMIZED
   useEffect(() => {
@@ -529,7 +506,7 @@ const CouponWheel: React.FC<{
           <div 
             className="absolute inset-0 rounded-full"
             style={{
-              background: `conic-gradient(from 0deg, ${segments.map((segment, index) => {
+              background: `conic-gradient(from 0deg, ${segments.map((segment: any, index: number) => {
                 const startPercent = (segment.startAngle / 360) * 100;
                 const endPercent = ((segment.startAngle + segment.angleSize) / 360) * 100;
                 
@@ -547,7 +524,7 @@ const CouponWheel: React.FC<{
             }}
           >
             {/* Text labels positioned absolutely - PERFORMANCE OPTIMIZED */}
-            {segments.map((segment, index) => {
+            {segments.map((segment: any, index: number) => {
               const midAngle = segment.startAngle + (segment.angleSize / 2);
               const radius = 150; // Distance from center for text
               const x = 50 + (radius / 240) * 50 * Math.cos((midAngle - 90) * Math.PI / 180);
@@ -1256,17 +1233,7 @@ const CouponRewardPopup: React.FC<{
   const popupRef = useRef<HTMLDivElement>(null);
   const sparklesRef = useRef<HTMLDivElement>(null);
   
-  // Safety check for null reward
-  if (!reward) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-red-500 text-white p-4 rounded-lg">
-          Error: No reward data available
-        </div>
-      </div>
-    );
-  }
-
+  // Always call hooks first - before any early returns
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose();
@@ -1276,36 +1243,49 @@ const CouponRewardPopup: React.FC<{
 
   // GSAP animations
   useEffect(() => {
-    if (popupRef.current) {
+    if (popupRef.current && reward) {
       gsap.fromTo(popupRef.current, 
         { scale: 0.5, opacity: 0, y: 50 },
         { 
           scale: 1, 
           opacity: 1, 
           y: 0,
-          duration: 0.3,
-          ease: "power2.out",
-          delay: 0 // Remove delay to prevent black flash
+          duration: 0.8,
+          ease: "power3.out",
+          onComplete: () => {
+            // Sparkle animation
+    if (sparklesRef.current) {
+      const sparkles = sparklesRef.current.children;
+              gsap.fromTo(sparkles, 
+                { scale: 0, opacity: 0 },
+                { 
+          scale: 1,
+          opacity: 1,
+                  duration: 0.6,
+                  stagger: 0.05,
+                  ease: "power2.out",
+          repeat: -1,
+                  yoyo: true,
+                  repeatDelay: 0.5
+                }
+              );
+            }
+          }
         }
       );
     }
-
-    // Sparkles animation
-    if (sparklesRef.current) {
-      const sparkles = sparklesRef.current.children;
-      Array.from(sparkles).forEach((sparkle, i) => {
-        gsap.to(sparkle, {
-          scale: 1,
-          opacity: 1,
-          rotation: 360,
-          duration: 2 + Math.random() * 2,
-          ease: "power2.inOut",
-          repeat: -1,
-          delay: i * 0.1
-        });
-      });
-    }
-  }, []);
+  }, [reward]);
+  
+  // Safety check for null reward - after hooks
+  if (!reward) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+        <div className="bg-red-500 text-white p-4 rounded-lg">
+          Error: No reward data available
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1606,8 +1586,30 @@ const MysteryBoxRealistic: React.FC<MysteryBoxRealisticProps> = ({
   const [frontendChoice, setFrontendChoice] = useState<any>(null);
   const [choiceCapture, setChoiceCapture] = useState<((choice: any) => void) | null>(null);
   const [rewardTier, setRewardTier] = useState<string | null>(null);
+  const [rewardConfigs, setRewardConfigs] = useState<any>(null);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load reward configuration from backend
+  useEffect(() => {
+    const loadRewardConfigs = async () => {
+      try {
+        setLoadingConfigs(true);
+        const backendConfig = await userApi.getRewardConfig();
+        const frontendConfig = convertBackendToFrontendConfig(backendConfig);
+        setRewardConfigs(frontendConfig);
+        console.log('🎯 Loaded reward configs from backend:', frontendConfig);
+      } catch (error) {
+        console.error('🚨 Failed to load reward configs, using defaults:', error);
+        setRewardConfigs(DEFAULT_REWARD_CONFIGS);
+      } finally {
+        setLoadingConfigs(false);
+      }
+    };
+
+    loadRewardConfigs();
+  }, []);
 
   // Reset states when modal is opened
   useEffect(() => {
@@ -1634,130 +1636,76 @@ const MysteryBoxRealistic: React.FC<MysteryBoxRealisticProps> = ({
   }, [isOpen]);
 
   const handleSphereOpen = async () => {
-    if (isProcessing) return;
+    if (isProcessing || loadingConfigs) return;
     
     setIsProcessing(true);
     
-    // Determine reward tier immediately when sphere is clicked
-    const tier = determineRewardTier();
-    setRewardTier(tier);
-    
-    console.log('🎯 Reward tier determined:', tier);
-    
-    if (tier === null) {
-      // NO REWARD - Sphere explodes but shows empty result
+    try {
+      // === NEW FLOW: Backend selects reward first ===
+      console.log('🎯 Calling backend to select reward...');
+      const backendResult = await userApi.openMysteryBox(); // No frontend choice
+      
+      if (!backendResult.success) {
+        throw new Error(backendResult.message || 'Failed to open mystery box');
+      }
+      
+      console.log('🎯 Backend selected reward:', backendResult.backend_selection);
+      
+      const backendSelection = backendResult.backend_selection;
+      const selectedTier = backendSelection.tier;
+      const selectedSegment = backendSelection.segment;
+      
+      setRewardTier(selectedTier);
+      setCurrentReward(backendResult); // Store the complete backend result
+      
+      if (selectedTier === 'NO_REWARD') {
+        // NO REWARD - Show empty card instead of wheel
       setTimeout(() => {
         setPhase('empty');
         setIsProcessing(false);
-      }, 2500); // Match the explosion timeline
-      
-      // Still call backend with no reward choice
-      try {
-        setTimeout(async () => {
-          const emptyChoice = {
-            coupon_type: 'no_reward',
-            display_name: 'No Reward',
-            segment_index: -1,
-            final_angle: 0,
-            random_offset: 0
-          };
-          
-          await onOpen(); // Call backend anyway for analytics
-        }, 100);
-      } catch (error) {
-        console.error('Error with empty reward:', error);
-      }
+        }, 2500);
     } else {
-      // HAS REWARD - Show wheel after explosion
+        // HAS REWARD - Show wheel after explosion, wheel will land on backend selection
       setTimeout(() => {
         setPhase('wheel');
         setIsProcessing(false);
-      }, 2500); // Match the explosion timeline
+        }, 2500);
+      }
+      
+    } catch (error) {
+      console.error('🚨 Error in sphere open:', error);
+      setIsProcessing(false);
+      
+      // Fallback to empty reward
+      setCurrentReward({
+        coupons_earned: 0,
+        coupon_descriptions: ['Error occurred'],
+        reward_type: 'ERROR',
+        celebration: '🚨 Error - Please try again'
+      });
+      
+      setTimeout(() => {
+        setPhase('empty');
+      }, 2500);
     }
   };
 
   const handleWheelSpin = async () => {
     if (isWheelSpinning) return;
     
-    console.log('🎯 handleWheelSpin called, current frontendChoice:', frontendChoice);
+    console.log('🎯 handleWheelSpin called - using backend selection from handleSphereOpen');
     setIsWheelSpinning(true);
     
-    let capturedChoice: any = null;
-    
-    const captureFunction = (choice: any) => {
-      console.log('🎯 Choice captured in closure:', choice);
-      capturedChoice = choice;
-    };
-    setChoiceCapture(() => captureFunction);
-    
     try {
-      const placeholderResult = {
-        coupons_earned: 1,
-        coupon_descriptions: ['Spinning...'],
-        reward_type: 'common',
-        celebration: '🎉 Congratulations!'
-      };
-      
-      setCurrentReward(placeholderResult);
-      
-      // Wait for wheel to finish spinning (8 seconds), then call backend with captured choice
-      setTimeout(async () => {
-        try {
-          console.log('🎯 8 seconds later - Using captured choice:', capturedChoice);
-          
-          const choiceToUse = capturedChoice || frontendChoice;
-          
-          if (!choiceToUse) {
-            throw new Error('CRITICAL: No choice captured - wheel failed to generate choice');
-          }
-          
-          if (!choiceToUse.coupon_type) {
-            throw new Error('CRITICAL: Choice missing coupon_type - invalid choice object');
-          }
-          
-          console.log('🎯 Sending choice to backend:', choiceToUse);
-          
-          const result = await userApi.openMysteryBox(choiceToUse);
-          
-          if (result && result.success) {
-            const finalReward = {
-              coupons_earned: 1,
-              coupon_descriptions: [`${choiceToUse.display_name} - ${choiceToUse.coupon_type.replace('_', ' ')} time!`],
-              reward_type: 'wheel_choice',
-              celebration: `🎉 You won ${choiceToUse.display_name}!`,
-              frontend_choice: choiceToUse
-            };
-            
-            setCurrentReward(finalReward);
-          } else {
-            throw new Error(`Backend rejected choice: ${result?.message || 'Unknown error'}`);
-          }
-          
+      // No need to call backend again - we already have the reward from handleSphereOpen
+      // Just wait for wheel to finish spinning and show the result
           setTimeout(() => {
             setPhase('reward');
             setIsWheelSpinning(false);
-          }, 1000);
+      }, 8000); // Wait for wheel animation to complete
           
         } catch (error) {
-          console.error('🚨 FATAL ERROR in mystery box:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown system error';
-          const errorReward = {
-            coupons_earned: 0,
-            coupon_descriptions: [errorMessage],
-            reward_type: 'system_error',
-            celebration: '🚨 System Error - Check Console',
-          };
-          setCurrentReward(errorReward);
-          
-          setTimeout(() => {
-            setPhase('reward');
-            setIsWheelSpinning(false);
-          }, 1000);
-        }
-      }, 8000);
-      
-    } catch (error) {
-      console.error('Error spinning wheel:', error);
+      console.error('Error in wheel spin:', error);
       setIsWheelSpinning(false);
       onClose?.();
     }
@@ -1846,6 +1794,8 @@ const MysteryBoxRealistic: React.FC<MysteryBoxRealisticProps> = ({
                 }}
                 result={currentReward}
                 rewardTier={rewardTier || undefined}
+                rewardConfigs={rewardConfigs || DEFAULT_REWARD_CONFIGS}
+                backendSelection={currentReward?.backend_selection}
               />
             </motion.div>
           )}
@@ -1882,12 +1832,31 @@ const MysteryBoxRealistic: React.FC<MysteryBoxRealisticProps> = ({
           {phase === 'empty' && (
             <motion.div
               key="empty"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="absolute inset-0 flex items-center justify-center"
+              initial={{ 
+                opacity: 0, 
+                scale: 0.5
+              }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1,
+                transition: { 
+                  duration: 0.8, 
+                  ease: "easeOut"
+                }
+              }}
+              className="absolute inset-0 flex items-center justify-center overflow-visible"
             >
-              <EmptyRewardDisplay onClose={handleRewardClose} />
+              <div className="bg-gradient-to-br from-gray-600 to-gray-800 p-8 rounded-2xl shadow-2xl text-center max-w-md mx-4 border-2 border-gray-500">
+                <div className="text-6xl mb-4">📦</div>
+                <h2 className="text-2xl font-bold text-white mb-4">Empty Box</h2>
+                <p className="text-gray-300 mb-6">Better luck next time!</p>
+                <button
+                  onClick={handleRewardClose}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

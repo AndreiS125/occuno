@@ -425,14 +425,7 @@ export default function Home() {
           </div>
         </motion.div>
       )}
-
-      {/* Mystery Box Realistic */}
-      <MysteryBoxRealistic 
-        isOpen={showMysteryBox}
-        onOpen={handleOpenMysteryBox}
-        onClose={handleCloseMysteryBox}
-        modelPath="/models/treasure-chest.glb"
-      />
+      
     </div>
   );
 } 

@@ -19,6 +19,33 @@ from repositories.objective_repository import ObjectiveRepository
 from domain.models import Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel, RecurringInfo
 
 
+def validate_date_span(start_date: Optional[datetime], due_date: Optional[datetime], all_day: bool) -> Optional[str]:
+    """
+    Validate that non-all-day events don't span multiple days.
+    
+    Args:
+        start_date: Start date/time of the event
+        due_date: Due date/time of the event
+        all_day: Whether the event is all-day
+        
+    Returns:
+        Error message if validation fails, None if valid
+    """
+    if all_day:
+        # All-day events can span multiple days
+        return None
+        
+    if not start_date or not due_date:
+        # If either date is missing, no validation needed
+        return None
+    
+    # Check if start and due dates are on different days
+    if start_date.date() != due_date.date():
+        return "Events cannot span multiple days unless they are marked as all-day. Please set 'all_day' to true for multi-day events, or ensure both start_date and due_date are on the same day."
+    
+    return None
+
+
 def custom_json_serializer(obj):
     """Custom JSON serializer for objects not serializable by default json code"""
     if isinstance(obj, timedelta):
@@ -291,13 +318,35 @@ async def retrieve_all_objectives() -> str:
         
         objectives_data = [obj.dict() for obj in all_objectives]
         
+        # Calculate summary statistics
+        by_type = {}
+        by_status = {}
+        by_priority = {"high": 0, "medium": 0, "low": 0}
+        
+        for obj in all_objectives:
+            # Count by type
+            obj_type = obj.objective_type.value if hasattr(obj.objective_type, 'value') else str(obj.objective_type)
+            by_type[obj_type] = by_type.get(obj_type, 0) + 1
+            
+            # Count by status
+            obj_status = obj.status.value if hasattr(obj.status, 'value') else str(obj.status)
+            by_status[obj_status] = by_status.get(obj_status, 0) + 1
+            
+            # Count by priority
+            if obj.priority_score >= 0.7:
+                by_priority["high"] += 1
+            elif obj.priority_score >= 0.4:
+                by_priority["medium"] += 1
+            else:
+                by_priority["low"] += 1
+        
         return safe_json_dumps({
             "objectives": objectives_data,
             "total_count": len(objectives_data),
             "summary": {
-                "by_type": {},
-                "by_status": {},
-                "by_priority": {"high": 0, "medium": 0, "low": 0}
+                "by_type": by_type,
+                "by_status": by_status,
+                "by_priority": by_priority
             }
         }, indent=2)
     
@@ -374,6 +423,15 @@ async def create_objective(objective_data: str) -> str:
             "recurring": recurring_info
         }
         
+        # Validate date span for non-all-day events
+        date_validation_error = validate_date_span(
+            base_fields["start_date"], 
+            base_fields["due_date"], 
+            base_fields["all_day"]
+        )
+        if date_validation_error:
+            return safe_json_dumps({"error": date_validation_error})
+        
         # Determine if this is a task or objective
         if data.get("objective_type") == "task":
             # Create Task with task-specific fields
@@ -430,10 +488,22 @@ async def update_objective(objective_id: str, updates: str) -> str:
             update_data["estimated_duration"] = timedelta(minutes=update_data["estimated_duration_minutes"])
             del update_data["estimated_duration_minutes"]  # Remove the minutes field
         
-        updated = await repo.update(UUID(objective_id), update_data)
-        
-        if not updated:
+        # Get existing objective to validate combined state
+        existing_objective = await repo.get_by_id(UUID(objective_id))
+        if not existing_objective:
             return safe_json_dumps({"error": f"Objective with ID {objective_id} not found"})
+        
+        # Determine final values after update
+        final_start_date = update_data.get("start_date", existing_objective.start_date)
+        final_due_date = update_data.get("due_date", existing_objective.due_date)
+        final_all_day = update_data.get("all_day", existing_objective.all_day)
+        
+        # Validate date span for non-all-day events
+        date_validation_error = validate_date_span(final_start_date, final_due_date, final_all_day)
+        if date_validation_error:
+            return safe_json_dumps({"error": date_validation_error})
+        
+        updated = await repo.update(UUID(objective_id), update_data)
         
         return safe_json_dumps({
             "success": True,

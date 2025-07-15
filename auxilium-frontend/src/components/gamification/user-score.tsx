@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import toast from "react-hot-toast";
-import { MysteryBoxRealistic } from "@/components/ui";
+import MysteryBoxRealistic from "@/components/ui/mystery-box-realistic";
 import { Coupon, DailyStatus, GamificationStats } from "@/types";
 
 interface UserScoreProps {
@@ -367,7 +367,6 @@ export default function UserScore({ className = "" }: UserScoreProps) {
         isOpen={showMysteryBox3D}
         onOpen={handle3DMysteryBoxOpen}
         onClose={handle3DMysteryBoxClose}
-        modelPath="/models/treasure-chest.glb"
       />
     </motion.div>
   );

@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Clock, CalendarIcon, Battery, BatteryLow, Zap, Trash2 } from "lucide-react";
+import { Clock, CalendarIcon, Battery, BatteryLow, Zap, Trash2, CheckCircle } from "lucide-react";
 import { Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel } from "@/types";
 import { objectivesApi } from "@/lib/api";
 import { 
@@ -25,6 +25,7 @@ import {
   parseDateOnlyToISO 
 } from "@/lib/date-utils";
 import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 
 interface ObjectiveFormData {
   title: string;
@@ -76,6 +77,7 @@ export function ObjectiveForm({
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<ObjectiveFormData>(() => {
@@ -356,6 +358,64 @@ export function ObjectiveForm({
     setDeleting(false);
   };
 
+  const handleComplete = async () => {
+    if (!initialData?.id || formData.status === ObjectiveStatus.COMPLETED) return;
+    
+    setCompleting(true);
+    try {
+      const result = await objectivesApi.complete(initialData.id);
+      const gamificationResult = result.gamification;
+      
+      // Update form data to reflect completion
+      setFormData(prev => ({
+        ...prev,
+        status: ObjectiveStatus.COMPLETED,
+        completion_percentage: 100
+      }));
+      
+      // Show success toast with XP information
+      const totalXp = gamificationResult?.total_xp_earned || 0;
+      const celebrationMessage = gamificationResult?.celebration || `Objective completed! +${totalXp} XP earned!`;
+      
+      toast.success(celebrationMessage, { duration: 4000 });
+      
+      // Show XP breakdown if available
+      if (gamificationResult?.xp_breakdown) {
+        const breakdown = gamificationResult.xp_breakdown;
+        const details: string[] = [];
+        if (breakdown.complexity_bonus > 0) details.push(`Complexity: +${breakdown.complexity_bonus}`);
+        if (breakdown.priority_bonus > 0) details.push(`Priority: +${breakdown.priority_bonus}`);
+        if (breakdown.type_bonus > 0) details.push(`Type: +${breakdown.type_bonus}`);
+        if (breakdown.timeliness_bonus > 0) details.push(`Early: +${breakdown.timeliness_bonus}`);
+        
+        if (details.length > 0) {
+          setTimeout(() => {
+            toast.success(`💡 XP Breakdown: ${details.join(', ')}`, { 
+              duration: 5000,
+              icon: '📊'
+            });
+          }, 2000);
+        }
+      }
+      
+      // If leveled up, show level up message
+      if (gamificationResult?.level_info?.leveled_up) {
+        setTimeout(() => {
+          toast.success(`🎆 LEVEL UP! You reached level ${gamificationResult.level_info.current_level}!`, { 
+            duration: 6000,
+            icon: '🎉'
+          });
+        }, 3000);
+      }
+      
+    } catch (err: any) {
+      setError(err.message || "Failed to complete objective");
+      toast.error("Failed to complete objective");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   const handleAllDayToggle = (checked: boolean) => {
     setFormData(prev => {
       const newData = { ...prev, all_day: checked };
@@ -618,46 +678,72 @@ export function ObjectiveForm({
 
       {/* Status (edit mode only) */}
       {isEdit && (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Status</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value: ObjectiveStatus) => 
-                setFormData({ ...formData, status: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ObjectiveStatus.NOT_STARTED}>Not Started</SelectItem>
-                <SelectItem value={ObjectiveStatus.IN_PROGRESS}>In Progress</SelectItem>
-                <SelectItem value={ObjectiveStatus.BLOCKED}>Blocked</SelectItem>
-                <SelectItem value={ObjectiveStatus.COMPLETED}>Completed</SelectItem>
-                <SelectItem value={ObjectiveStatus.CANCELLED}>Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value: ObjectiveStatus) => 
+                  setFormData({ ...formData, status: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ObjectiveStatus.NOT_STARTED}>Not Started</SelectItem>
+                  <SelectItem value={ObjectiveStatus.IN_PROGRESS}>In Progress</SelectItem>
+                  <SelectItem value={ObjectiveStatus.BLOCKED}>Blocked</SelectItem>
+                  <SelectItem value={ObjectiveStatus.COMPLETED}>Completed</SelectItem>
+                  <SelectItem value={ObjectiveStatus.CANCELLED}>Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Completion ({formData.completion_percentage}%)</Label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={formData.completion_percentage}
+                onChange={(e) => {
+                  const percentage = parseInt(e.target.value);
+                  setFormData({ 
+                    ...formData, 
+                    completion_percentage: percentage
+                  });
+                }}
+                className="w-full"
+              />
+            </div>
           </div>
 
-          <div>
-            <Label>Completion ({formData.completion_percentage}%)</Label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={formData.completion_percentage}
-              onChange={(e) => {
-                const percentage = parseInt(e.target.value);
-                setFormData({ 
-                  ...formData, 
-                  completion_percentage: percentage
-                });
-              }}
-              className="w-full"
-            />
-          </div>
+          {/* Complete Button */}
+          {formData.status !== ObjectiveStatus.COMPLETED && (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                onClick={handleComplete}
+                disabled={completing || loading}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {completing ? "Completing..." : "Complete & Earn XP"}
+              </Button>
+            </div>
+          )}
+
+          {formData.status === ObjectiveStatus.COMPLETED && (
+            <div className="flex justify-center">
+              <div className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400 px-4 py-2 rounded-lg flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                ✨ Completed
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -718,7 +804,7 @@ export function ObjectiveForm({
                 <Label>Days of Week</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, index) => (
-                    <div key={day} className="flex items-center space-x-2">
+                    <div key={day} className="flex items-center space-x-2 checkbox-container">
                       <Checkbox
                         id={`day-${index}`}
                         checked={formData.recurring?.days_of_week.includes(index)}
@@ -733,7 +819,7 @@ export function ObjectiveForm({
                           });
                         }}
                       />
-                      <Label htmlFor={`day-${index}`} className="text-sm">
+                      <Label htmlFor={`day-${index}`} className="text-sm cursor-pointer">
                         {day}
                       </Label>
                     </div>
