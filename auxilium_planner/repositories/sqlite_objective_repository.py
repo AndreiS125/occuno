@@ -134,8 +134,8 @@ class SQLiteObjectiveRepository:
                     objective.points_awarded_for_completion, objective.completion_timeliness_score,
                     json_serialize(objective.recurring.model_dump() if objective.recurring else None),
                     getattr(objective, 'location', None),
-                    getattr(objective, 'estimated_duration', None),
-                    getattr(objective, 'actual_duration', None),
+                    getattr(objective, 'estimated_duration', None).total_seconds() if getattr(objective, 'estimated_duration', None) else None,
+                    getattr(objective, 'actual_duration', None).total_seconds() if getattr(objective, 'actual_duration', None) else None,
                     json_serialize(getattr(objective, 'actionable_steps', []))
                 ))
                 

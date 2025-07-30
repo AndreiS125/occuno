@@ -15,7 +15,7 @@ import json
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from repositories.objective_repository import ObjectiveRepository
+from repositories.sqlite_objective_repository import SQLiteObjectiveRepository as ObjectiveRepository
 from domain.models import Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel, RecurringInfo
 
 
@@ -181,13 +181,24 @@ async def retrieve_objective_by_id(objective_id: str, with_children: bool = Fals
         if not objective:
             return safe_json_dumps({"error": f"Objective with ID {objective_id} not found"})
         
-        result = objective.dict()
+        # Use model_dump instead of dict for pydantic v2 compatibility
+        try:
+            result = objective.model_dump()
+        except AttributeError:
+            # Fallback to .dict() for older pydantic
+            result = objective.dict()
         
         if with_children:
             # Get all children recursively
             all_objectives = await repo.get_all()
             children = [obj for obj in all_objectives if obj.parent_id == objective.id]
-            result["children"] = [child.dict() for child in children]
+            
+            # Use model_dump for children too
+            try:
+                result["children"] = [child.model_dump() for child in children]
+            except AttributeError:
+                # Fallback to .dict()
+                result["children"] = [child.dict() for child in children]
         
         return safe_json_dumps(result, indent=2)
     
@@ -223,7 +234,13 @@ async def retrieve_objective_by_name(name: str) -> str:
         
         # Sort by relevance score and take top 3
         matches.sort(key=lambda x: x[0], reverse=True)
-        top_matches = [match[1].dict() for match in matches[:3]]
+        
+        # Use model_dump instead of dict for pydantic v2 compatibility
+        try:
+            top_matches = [match[1].model_dump() for match in matches[:3]]
+        except AttributeError:
+            # Fallback to .dict() for older pydantic
+            top_matches = [match[1].dict() for match in matches[:3]]
         
         return safe_json_dumps({"matches": top_matches, "total_found": len(matches)}, indent=2)
     
@@ -253,7 +270,13 @@ async def retrieve_full_objective_tree(objective_id: str) -> str:
         
         def build_tree(parent_obj):
             children = [obj for obj in all_objectives if obj.parent_id == parent_obj.id]
-            result = parent_obj.dict()
+            # Use model_dump instead of dict for pydantic v2 compatibility
+            try:
+                result = parent_obj.model_dump()
+            except AttributeError:
+                # Fallback to .dict() for older pydantic
+                result = parent_obj.dict()
+                
             if children:
                 result["children"] = [build_tree(child) for child in children]
             return result
@@ -291,8 +314,20 @@ async def retrieve_objectives_by_time_period(start_date: str, end_date: str) -> 
             obj_end = obj.due_date or obj_start
             
             if obj_start and obj_end:
+                # Ensure timezone consistency for comparison
+                # Convert timezone-naive datetimes to UTC for comparison
+                if obj_start.tzinfo is None:
+                    obj_start = obj_start.replace(tzinfo=datetime.now().astimezone().tzinfo)
+                if obj_end.tzinfo is None:
+                    obj_end = obj_end.replace(tzinfo=datetime.now().astimezone().tzinfo)
+                    
                 if (obj_start <= end_dt and obj_end >= start_dt):
-                    matching_objectives.append(obj.dict())
+                    # Use model_dump instead of dict for pydantic v2 compatibility
+                    try:
+                        matching_objectives.append(obj.model_dump())
+                    except AttributeError:
+                        # Fallback to .dict() for older pydantic
+                        matching_objectives.append(obj.dict())
         
         return safe_json_dumps({
             "objectives": matching_objectives,
@@ -316,7 +351,12 @@ async def retrieve_all_objectives() -> str:
         repo = ObjectiveRepository()
         all_objectives = await repo.get_all()
         
-        objectives_data = [obj.dict() for obj in all_objectives]
+        # Use model_dump instead of dict for pydantic v2 compatibility
+        try:
+            objectives_data = [obj.model_dump() for obj in all_objectives]
+        except AttributeError:
+            # Fallback to .dict() for older pydantic
+            objectives_data = [obj.dict() for obj in all_objectives]
         
         # Calculate summary statistics
         by_type = {}

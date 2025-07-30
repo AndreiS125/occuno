@@ -53,7 +53,7 @@ export function useCalendarView() {
 }
 
 export function CalendarViewProvider({ children }: { children: React.ReactNode }) {
-  const [viewMode, setViewMode] = useState<"gantt" | "calendar">("gantt");
+  const [viewMode, setViewMode] = useState<"gantt" | "calendar">("calendar");
   
   return (
     <CalendarViewContext.Provider value={{ viewMode, setViewMode }}>

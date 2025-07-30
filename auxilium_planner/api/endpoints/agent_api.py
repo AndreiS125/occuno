@@ -1004,8 +1004,8 @@ async def chat_with_single_agent(request: ChatRequest) -> ChatResponse:
     try:
         logger.info(f"⚡ New single agent chat request: {request.message[:100]}...")
         
-        # Get single agent graph
-        agent = get_single_agent_graph()
+        # Create a fresh agent instance for each request
+        agent = SingleAgentGraph()
         
         # Process the user input
         response = await agent.process_user_input(

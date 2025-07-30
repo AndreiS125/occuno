@@ -60,8 +60,7 @@ class SingleAgentGraph:
         # More efficient model configuration - less thinking, faster responses
         model_config = {
             "model": "gemini-2.5-flash",
-            "temperature": 0.7,  # Slightly higher for more direct responses
-            "max_output_tokens": 4096,  # Reasonable limit
+            "temperature": 0.7,  # Slightly higher for more direct responses # Reasonable limit
             "top_p": 0.9,
             "top_k": 40,
             "max_retries": 2,  # Fewer retries for speed
@@ -97,22 +96,32 @@ class SingleAgentGraph:
         # Remove conflicting final response tools - keep only final_response_to_user
         self.all_tools = [tool for tool in all_tools if tool.name != 'final_response']
         
-        # Bind tools to the agent
-        self.agent = self.llm.bind_tools(self.all_tools)
-        
-        logger.info(f"Single agent initialized with {len(self.all_tools)} tools")
+        # Bind tools to the agent with forced tool calling
+        # Use 'any' mode to ensure the agent always calls a tool
+        try:
+            self.agent = self.llm.bind_tools(self.all_tools, tool_choice='any')
+            logger.info(f"🔧 Single agent initialized with {len(self.all_tools)} tools - FORCED TOOL CALLING ENABLED")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to enable forced tool calling, falling back to default: {e}")
+            self.agent = self.llm.bind_tools(self.all_tools)
+            logger.info(f"Single agent initialized with {len(self.all_tools)} tools - default mode")
     
     def _create_tool_node(self):
         """Create a tool execution node."""
         tool_map = {tool.name: tool for tool in self.all_tools}
         
         async def execute_tools(state: SingleAgentState) -> Dict[str, Any]:
+            # Force database initialization to ensure fresh data
+            from core.database import initialize_database
+            await initialize_database()
+            
             messages = state.get("messages", [])
             if not messages:
                 return {"messages": []}
             
             last_message = messages[-1]
             if not hasattr(last_message, 'tool_calls') or not last_message.tool_calls:
+                print("NO TOOL CALLS HAVE BEEN MADE")
                 return {"messages": []}
             
             tool_messages = []
@@ -122,6 +131,8 @@ class SingleAgentGraph:
                 tool_name = tool_call.get('name')
                 tool_args = tool_call.get('args', {})
                 tool_id = tool_call.get('id', 'unknown')
+                
+                logger.info(f"🔧 Executing tool: {tool_name} with args: {tool_args}")
                 
                 try:
                     if tool_name in tool_map:
@@ -142,9 +153,14 @@ class SingleAgentGraph:
                                 pass
                         
                         tool_messages.append(ToolMessage(content=str(result), name=tool_name, tool_call_id=tool_id))
+                        logger.info(f"✅ Tool {tool_name} executed successfully")
                     else:
-                        tool_messages.append(ToolMessage(content=f"Tool {tool_name} not found", name=tool_name, tool_call_id=tool_id))
+                        error_msg = f"Tool {tool_name} not found"
+                        logger.error(error_msg)
+                        tool_messages.append(ToolMessage(content=error_msg, name=tool_name, tool_call_id=tool_id))
                 except Exception as e:
+                    error_msg = f"Error executing {tool_name}: {str(e)}"
+                    logger.error(error_msg)
                     tool_messages.append(ToolMessage(content=f"Error: {str(e)}", name=tool_name, tool_call_id=tool_id))
             
             return {"messages": tool_messages, **updates}
@@ -152,16 +168,14 @@ class SingleAgentGraph:
         return execute_tools
     
     def _build_graph(self) -> StateGraph:
-        """Build the simplified LangGraph workflow."""
+        """Build the LangGraph workflow."""
         workflow = StateGraph(SingleAgentState)
         
-        # Simple 3-node workflow: initialize -> agent -> finalize
         workflow.add_node("initialize", self._initialize_node)
         workflow.add_node("agent", self._agent_node)
         workflow.add_node("tools", self._create_tool_node())
         workflow.add_node("finalize", self._finalize_node)
         
-        # Linear flow with tool execution loop
         workflow.add_edge(START, "initialize")
         workflow.add_edge("initialize", "agent")
         
@@ -181,7 +195,12 @@ class SingleAgentGraph:
         
         workflow.add_edge("finalize", END)
         
-        return workflow.compile(checkpointer=self.memory_system.get_checkpointer())
+        # Use a fresh MemorySaver for each graph
+        # The namespace will be provided in the config during invocation
+        from langgraph.checkpoint.memory import MemorySaver
+        checkpointer = MemorySaver()
+        
+        return workflow.compile(checkpointer=checkpointer)
     
     def _should_continue(self, state: SingleAgentState) -> str:
         """Determine if agent should use tools or finalize."""
@@ -192,15 +211,7 @@ class SingleAgentGraph:
             logger.info(f"🔄 Single agent reached iteration limit ({iteration_count}), finalizing")
             return "finalize"
         
-        # Check if we have tool calls
-        messages = state.get("messages", [])
-        if messages and hasattr(messages[-1], 'tool_calls') and messages[-1].tool_calls:
-            tool_calls = messages[-1].tool_calls
-            logger.info(f"🔧 Single agent has {len(tool_calls)} tool calls to execute")
-            return "tools"
-        
-        logger.info(f"🏁 Single agent has no tool calls, finalizing")
-        return "finalize"
+        return "tools"
     
     def _should_continue_after_tools(self, state: SingleAgentState) -> str:
         """Determine flow after tool execution."""
@@ -213,7 +224,7 @@ class SingleAgentGraph:
             return "finalize"
         
         # Check iteration count
-        if iteration_count >= 10:
+        if iteration_count >= 50:
             logger.info(f"🔄 Iteration limit reached ({iteration_count}), finalizing")
             return "finalize"
         
@@ -221,47 +232,80 @@ class SingleAgentGraph:
         logger.info(f"🔁 Continuing to agent (iteration {iteration_count})")
         return "agent"
     
-    async def _initialize_node(self, state: SingleAgentState) -> Dict[str, Any]:
-        """Initialize the single agent workflow."""
+    async def _initialize_node(self, state: SingleAgentState) -> SingleAgentState:
+        """Initialize the agent workflow with user input and conversation context."""
         try:
-            user_context = await self.memory_system.get_user_context()
+            # Get the thread ID
+            thread_id = state.get("thread_id", None)
+            if not thread_id:
+                thread_id = await self.memory_system.create_new_thread()
+                state["thread_id"] = thread_id
             
-            user_input = ""
-            if state["messages"]:
-                last_message = state["messages"][-1]
-                user_input = last_message.content if hasattr(last_message, 'content') else str(last_message)
+            # Get the user input
+            messages = state.get("messages", [])
+            if not messages:
+                state["user_input"] = ""
+                return state
+                
+            last_message = messages[-1]
+            if not hasattr(last_message, 'content'):
+                state["user_input"] = ""
+                return state
+                
+            user_input = last_message.content
+            state["user_input"] = user_input
             
-            thread_id = state.get("thread_id", "default")
+            # Create a new exchange in the memory system
             exchange_id = await self.memory_system.start_new_exchange(thread_id, user_input)
-            conversation_history = await self.memory_system.get_context_for_planner(thread_id)
+            state["exchange_id"] = exchange_id
             
-            return {
-                "user_input": user_input,
-                "user_memories": user_context["user_memories"],
-                "thread_id": thread_id,
-                "exchange_id": exchange_id,
-                "conversation_history": conversation_history,
-                "iteration_count": 0,
-                "terminal_tool_executed": False
-            }
-        
+            # Force database reinitialization to ensure we're using the latest data
+            from core.database import initialize_database
+            await initialize_database()
+            
+            # Load conversation history
+            conversation_history = await self.memory_system.get_context_for_planner(thread_id)
+            state["conversation_history"] = conversation_history
+            
+            # Load user memories for the agent
+            user_memories = await self.memory_system.get_user_memories_for_prompt()
+            state["user_memories"] = user_memories
+            
+            # Reset iteration count and terminal flag
+            state["iteration_count"] = 0
+            state["terminal_tool_executed"] = False
+            
+            # Debug log
+            logger.info(f"🚀 Single Agent initialized: Thread ID {thread_id}, Exchange ID {exchange_id}")
+            
+            # Add context for thread/exchange
+            self.memory_system.current_thread_id = thread_id
+            self.memory_system.current_exchange_id = exchange_id
+            
+            return state
+            
         except Exception as e:
-            logger.error(f"Error in initialize node: {e}")
-            return {
-                "user_input": "Error initializing workflow",
-                "iteration_count": 0,
-                "terminal_tool_executed": False
-            }
+            logger.error(f"Error initializing agent: {e}")
+            state["error"] = str(e)
+            return state
     
     async def _agent_node(self, state: SingleAgentState) -> Dict[str, Any]:
-        """Execute the single agent."""
+        """Handle the single agent's thinking and response generation."""
         try:
-            user_context = await self.memory_system.get_user_context()
+            # Increment iteration count
+            iteration_count = state.get("iteration_count", 0) + 1
+            state["iteration_count"] = iteration_count
             
-            # Create system prompt
-            system_prompt = self._create_system_prompt(
-                user_context["formatted_date"],
-                state["user_memories"]
+            logger.info(f"⚙️ Running single agent iteration #{iteration_count}")
+            
+            # Get fresh user memories on each iteration
+            state["user_memories"] = await self.memory_system.get_user_memories_for_prompt()
+            
+            # Prepare system prompt with current date and user memories
+            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            system_prompt = SINGLE_AGENT_PROMPT.format(
+                current_date=current_date,
+                user_memories=state["user_memories"]
             )
             
             messages = [SystemMessage(content=system_prompt)]
@@ -278,14 +322,9 @@ class SingleAgentGraph:
             else:
                 # Continue conversation - validate existing messages
                 existing_messages = state.get("messages", [])
-                valid_existing_messages = []
                 for msg in existing_messages:
-                    if hasattr(msg, 'content') and msg.content and msg.content.strip():
-                        valid_existing_messages.append(msg)
-                    else:
-                        logger.warning(f"🚨 Skipping empty message in continuation: {type(msg).__name__}")
+                    messages.append(msg)
                 
-                messages.extend(valid_existing_messages)
                 messages.append(HumanMessage(content="Continue with the task."))
             
             # Debug: Log the messages being sent to the agent
@@ -300,10 +339,7 @@ class SingleAgentGraph:
             # Validate messages before sending to agent
             valid_messages = []
             for msg in messages:
-                if hasattr(msg, 'content') and msg.content and msg.content.strip():
-                    valid_messages.append(msg)
-                else:
-                    logger.warning(f"🚨 Skipping empty message: {type(msg).__name__}")
+                valid_messages.append(msg)
             
             if not valid_messages:
                 logger.error("🚨 No valid messages to send to agent!")
@@ -357,26 +393,20 @@ class SingleAgentGraph:
                         logger.warning(f"Skipping malformed content part: {part} - Error: {e}")
                         continue
                 
+                # Return a properly filtered AIMessage with only text content
                 return AIMessage(
                     content=" ".join(text_content) if text_content else "",
                     tool_calls=response.tool_calls if hasattr(response, 'tool_calls') else None,
-                    usage_metadata=getattr(response, 'usage_metadata', None),
-                    response_metadata=getattr(response, 'response_metadata', {}),
-                    id=getattr(response, 'id', None)
+                    id=response.id if hasattr(response, 'id') else None,
+                    response_metadata=response.response_metadata if hasattr(response, 'response_metadata') else None
                 )
-            else:
-                return response
+            
+            # If content is not a list, return as-is
+            return response
         except Exception as e:
             logger.error(f"Error processing agent response: {e}")
             # Return a safe fallback response
-            return AIMessage(
-                content=str(response.content) if hasattr(response, 'content') else "",
-                tool_calls=response.tool_calls if hasattr(response, 'tool_calls') else None,
-                usage_metadata=getattr(response, 'usage_metadata', None),
-                response_metadata=getattr(response, 'response_metadata', {}),
-                id=getattr(response, 'id', None)
-            )
-    
+            return AIMessage(content=f"Error processing response: {str(e)}")
     async def _finalize_node(self, state: SingleAgentState) -> Dict[str, Any]:
         """Finalize the single agent workflow."""
         try:
@@ -423,13 +453,24 @@ class SingleAgentGraph:
             if not thread_id:
                 thread_id = await self.memory_system.create_new_thread()
             
+            # Force database initialization to ensure we're using the latest data
+            from core.database import initialize_database
+            await initialize_database()
+            
+            # Generate a unique namespace for this conversation
+            checkpoint_ns = self.memory_system.get_checkpoint_namespace(thread_id)
+            
             initial_state = {
                 "messages": [HumanMessage(content=user_input)],
-                "thread_id": thread_id
+                "thread_id": thread_id,
+                "checkpoint_ns": checkpoint_ns  # Provide explicit namespace
             }
             
             config = RunnableConfig(
-                configurable={"thread_id": thread_id},
+                configurable={
+                    "thread_id": thread_id,
+                    "checkpoint_namespace": checkpoint_ns  # Pass to config as well
+                },
                 recursion_limit=20,  # More aggressive limit to prevent hanging
                 max_steps=20
             )
@@ -938,9 +979,10 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
                         await self.memory_system.add_agent_message(
                             self.current_thread_id,
                             self.current_exchange_id,
-                            'single',
-                            thought,
-                            "thinking"
+                            "single",
+                            "",  # thinking content captured separately
+                            "thinking",
+                            thought
                         )
                     
                     # Emit thinking event
@@ -951,6 +993,22 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
                         'thinking_id': thinking_id
                     })
                     logger.info(f"💭 Emitted single agent thinking: {thought[:100]}...")
+                
+                # Filter out thinking content and return clean response
+                text_content = []
+                for part in original_response.content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        text_content.append(part.get("text", ""))
+                    elif isinstance(part, str):
+                        text_content.append(part)
+                
+                # Return filtered response
+                return AIMessage(
+                    content=" ".join(text_content) if text_content else "",
+                    tool_calls=original_response.tool_calls if hasattr(original_response, 'tool_calls') else None,
+                    id=original_response.id if hasattr(original_response, 'id') else None,
+                    response_metadata=original_response.response_metadata if hasattr(original_response, 'response_metadata') else None
+                )
             
             return original_response
         

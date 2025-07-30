@@ -447,10 +447,60 @@ class MemorySystem:
             self.logger.error(f"Error marking exchange incomplete: {e}")
             return False
 
+    async def clear_memory_cache(self, thread_id: str) -> bool:
+        """Clear any cached data to force fresh reads from database."""
+        try:
+            logger.info(f"🧹 Clearing memory cache for thread {thread_id}")
+            
+            # Clear LangGraph state to force fresh reads
+            config = RunnableConfig(
+                configurable={"thread_id": thread_id}
+            )
+            
+            # Reset state but preserve thread ID
+            reset_state = {
+                "messages": [],
+                "planning_analysis": "",
+                "user_memories": await get_user_memories_for_prompt(),
+                "thread_id": thread_id,
+                "exchange_id": self.current_exchange_id,
+                "user_input": "",
+                "conversation_history": "",
+                "iteration_count": 0,
+                "terminal_tool_executed": False,
+                "created_at": datetime.utcnow().isoformat(),
+                "last_updated": datetime.utcnow().isoformat(),
+                "reset_at": datetime.utcnow().isoformat(),
+                "checkpoint_ns": f"thread_{thread_id}_reset_{datetime.utcnow().timestamp()}"  # Force new namespace
+            }
+            
+            # Use a new namespace to force fresh checkpoint
+            self.checkpointer.put(config, reset_state, {}, {})
+            logger.info(f"✅ Memory cache cleared for thread {thread_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error clearing memory cache: {e}")
+            return False
+
     def get_checkpointer(self):
         """Get the LangGraph checkpointer."""
-        return self.checkpointer
+        # Return a fresh checkpointer instance on each call
+        # This prevents state corruption between different runs
+        return MemorySaver()
     
     async def get_stats(self) -> Dict[str, Any]:
         """Get conversation statistics."""
         return await self.conversation_repo.get_stats() 
+
+    async def get_user_memories_for_prompt(self) -> str:
+        """Get user memories formatted for the prompt."""
+        return await get_user_memories_for_prompt() 
+
+    def get_checkpoint_namespace(self, thread_id: str) -> str:
+        """Generate a unique namespace for checkpoints based on thread ID."""
+        try:
+            return f"thread_{thread_id}_{datetime.utcnow().timestamp()}"
+        except Exception as e:
+            logger.error(f"Error generating checkpoint namespace: {e}")
+            return f"thread_fallback_{datetime.utcnow().timestamp()}" 

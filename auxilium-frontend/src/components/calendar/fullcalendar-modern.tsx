@@ -55,6 +55,7 @@ export function FullCalendarModern({
   const [showModal, setShowModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
+  const [showAllDay, setShowAllDay] = useState(true);
   const calendarRef = useRef<FullCalendar>(null);
 
   // Convert objectives to FullCalendar events
@@ -115,10 +116,8 @@ export function FullCalendarModern({
         durationHours: (end.getTime() - start.getTime()) / (1000 * 60 * 60)
       });
       
-      // For timed events, ensure minimum duration of 30 minutes for visibility
-      if (!allDay && end.getTime() - start.getTime() < 30 * 60 * 1000) {
-        end.setTime(start.getTime() + 60 * 60 * 1000); // 1 hour minimum
-      }
+      // Let events display their actual duration - no artificial minimum
+      // FullCalendar will handle minimum visual height via eventMinHeight setting
 
       // Color based on status
       let backgroundColor = "#60a5fa"; // Default blue
@@ -455,7 +454,7 @@ export function FullCalendarModern({
         editable={true}
         selectable={true}
         selectMirror={true}
-        dayMaxEvents={true}
+        dayMaxEvents={showAllDay ? 2 : false}
         weekends={true}
         events={events}
         select={handleDateSelect}
@@ -479,17 +478,19 @@ export function FullCalendarModern({
         lazyFetching={true}
         // Styling
         themeSystem="standard"
-        // Time settings
+        // Time settings - Improved for better event duration rendering
         slotMinTime="00:00:00"
         slotMaxTime="24:00:00"
-        slotDuration="00:30:00"
+        slotDuration="00:15:00"  // Smaller slots for better precision
         slotLabelInterval="01:00:00"
-        snapDuration="00:15:00"
-        // All-day settings
-        allDaySlot={true}
-        allDayText="All Day"
-        // Event rendering
-        eventMinHeight={25}
+        snapDuration="00:05:00"  // Finer snapping for precise times
+        // All-day settings - More compact
+        allDaySlot={showAllDay}
+        allDayText={showAllDay ? "All Day" : ""}
+        dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
+        // Event rendering - Allow smaller events
+        eventMinHeight={15}  // Smaller minimum height for short events
+        eventShortHeight={20}  // Height for events under 30 minutes
         // Now indicator
         nowIndicator={true}
         // Custom styling through CSS classes
@@ -519,6 +520,14 @@ export function FullCalendarModern({
 
 
       {/* Note: Custom styles are now in /src/styles/fullcalendar.css */}
+      
+      {/* Toggle All-Day Section Button */}
+      <button 
+        onClick={() => setShowAllDay(!showAllDay)}
+        className="fixed bottom-4 right-4 z-10 px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-lg hover:bg-primary/90 transition-colors"
+      >
+        {showAllDay ? 'Hide All-Day Section' : 'Show All-Day Section'}
+      </button>
     </motion.div>
   );
 } 

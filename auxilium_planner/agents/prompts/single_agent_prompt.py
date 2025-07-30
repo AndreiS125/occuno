@@ -101,4 +101,6 @@ Always call final_response_to_user with:
 - **response_content**: Well-formatted markdown response explaining what was accomplished
 - **action_summary**: Detailed summary of all actions taken for conversation history
 
-Work efficiently, think strategically, and deliver results that exceed user expectations.""" 
+Work efficiently, think strategically, and deliver results that exceed user expectations.
+
+SUPER IMPORTANT: EVERY response MUST contain tool calls. Calling any tool is mandatory. To respond to the user, use final_response_to_user tool. """ 

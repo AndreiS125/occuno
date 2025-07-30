@@ -463,7 +463,7 @@ class SQLiteConversationRepository:
                         )
                 
                 await conn.commit()
-                self.logger.info(f"Saved conversation history for thread {history.thread_id}")
+                self.logger.debug(f"Saved conversation history for thread {history.thread_id}")
         
         except Exception as e:
             self.logger.error(f"Error saving conversation history: {e}")

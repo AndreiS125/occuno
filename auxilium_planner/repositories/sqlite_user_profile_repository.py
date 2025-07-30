@@ -40,6 +40,14 @@ class SQLiteUserProfileRepository:
                 # Parse JSON fields
                 profile_data['preferred_work_hours'] = json_deserialize(profile_data['preferred_work_hours'])
                 profile_data['completion_patterns'] = json_deserialize(profile_data['completion_patterns'])
+                
+                # Fix float to int conversions for integer fields that might be stored as floats
+                if 'weekly_challenge_progress' in profile_data and profile_data['weekly_challenge_progress'] is not None:
+                    profile_data['weekly_challenge_progress'] = int(profile_data['weekly_challenge_progress'])
+                
+                if 'daily_tasks_completed_today' in profile_data and profile_data['daily_tasks_completed_today'] is not None:
+                    profile_data['daily_tasks_completed_today'] = int(profile_data['daily_tasks_completed_today'])
+                
                 # Load custom_reward_config from JSON
                 from domain.models import CustomRewardConfiguration
                 if profile_data.get('custom_reward_config'):

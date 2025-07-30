@@ -789,7 +789,8 @@ const ChatPage: React.FC = () => {
 
   const updateExecutionWithEvent = useCallback(async (event: StreamingEvent) => {
     setExecutions(prev => prev.map(execution => {
-      if (execution.id !== prev[prev.length - 1]?.id) return execution;
+      // Update the execution that matches the current execution ID, not just the last one
+      if (execution.id !== currentExecutionId) return execution;
 
       const updated = { ...execution };
 

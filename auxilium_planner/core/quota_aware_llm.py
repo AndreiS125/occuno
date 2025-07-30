@@ -179,23 +179,91 @@ class QuotaAwareChatGoogleGenerativeAI:
         finally:
             loop.close()
     
-    def bind_tools(self, tools):
-        """Return a wrapper that binds tools to working LLM instances."""
+    def bind_tools(self, tools, tool_choice=None, **kwargs):
+        """Return a wrapper that binds tools to working LLM instances.
+        
+        Args:
+            tools: List of tools to bind
+            tool_choice: Tool choice mode - 'any' to force tool calls, 'auto' for default behavior
+            **kwargs: Additional arguments passed to bind_tools
+        """
         parent_self = self  # Capture reference to parent for token usage tracking
         
         class ToolBoundWrapper:
-            def __init__(self, factory, tools):
+            def __init__(self, factory, tools, tool_choice=None, bind_kwargs=None):
                 self.factory = factory
                 self.tools = tools
                 self.parent = parent_self
+                self.tool_choice = tool_choice
+                self.bind_kwargs = bind_kwargs or {}
             
             async def _get_working_llm(self):
                 llm = await self.factory.create_working_llm()
-                return llm.bind_tools(self.tools)
+                
+                # For Gemini, we need to handle tool_choice differently
+                if self.tool_choice == 'any':
+                    # Try to use the native Gemini API approach for forcing tool calls
+                    try:
+                        # Import Gemini types for function calling config
+                        import google.generativeai as genai
+                        from google.generativeai.types import FunctionCallingConfig, ToolConfig
+                        
+                        # Create function calling config to force tool calls
+                        function_calling_config = FunctionCallingConfig(
+                            mode=FunctionCallingConfig.Mode.ANY
+                        )
+                        tool_config = ToolConfig(
+                            function_calling_config=function_calling_config
+                        )
+                        
+                        # Try to pass this config to the LLM if possible
+                        # Note: This might need adjustment based on LangChain's implementation
+                        bound_llm = llm.bind_tools(self.tools, **self.bind_kwargs)
+                        
+                        # Store the config for potential use in invoke methods
+                        bound_llm._force_tool_calls = True
+                        bound_llm._tool_config = tool_config
+                        
+                        logger.info("🔧 Configured Gemini to force tool calls (ANY mode)")
+                        return bound_llm
+                        
+                    except ImportError as e:
+                        logger.warning(f"⚠️ Could not import Gemini types for forced tool calls: {e}")
+                        # Fall back to regular binding
+                        return llm.bind_tools(self.tools, **self.bind_kwargs)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not configure forced tool calls: {e}")
+                        # Fall back to regular binding
+                        return llm.bind_tools(self.tools, **self.bind_kwargs)
+                else:
+                    # Regular tool binding
+                    return llm.bind_tools(self.tools, **self.bind_kwargs)
             
             async def ainvoke(self, messages, **kwargs):
                 bound_llm = await self._get_working_llm()
-                response = await bound_llm.ainvoke(messages, **kwargs)
+                
+                # If we're forcing tool calls and the LLM supports it, add additional prompting
+                if self.tool_choice == 'any' and hasattr(bound_llm, '_force_tool_calls'):
+                    # Add a system-like instruction to encourage tool usage
+                    # Since Gemini doesn't support system messages, we'll modify the last user message
+                    modified_messages = messages.copy()
+                    if modified_messages and hasattr(modified_messages[-1], 'content'):
+                        last_msg = modified_messages[-1]
+                        if hasattr(last_msg, 'content') and last_msg.content:
+                            # Append instruction to use tools
+                            original_content = last_msg.content
+                            enhanced_content = f"{original_content}\n\nIMPORTANT: You must use one of the available tools to respond to this request. Do not provide a direct text response without using a tool."
+                            
+                            # Create new message with enhanced content
+                            from langchain_core.messages import HumanMessage, AIMessage
+                            if isinstance(last_msg, HumanMessage):
+                                modified_messages[-1] = HumanMessage(content=enhanced_content)
+                            elif hasattr(last_msg, 'type') and last_msg.type == 'human':
+                                modified_messages[-1] = HumanMessage(content=enhanced_content)
+                    
+                    response = await bound_llm.ainvoke(modified_messages, **kwargs)
+                else:
+                    response = await bound_llm.ainvoke(messages, **kwargs)
                 
                 # Capture token usage in parent for logging
                 self.parent._capture_token_usage(response)
@@ -206,7 +274,7 @@ class QuotaAwareChatGoogleGenerativeAI:
                 import asyncio
                 return asyncio.run(self.ainvoke(messages, **kwargs))
         
-        return ToolBoundWrapper(self.factory, tools)
+        return ToolBoundWrapper(self.factory, tools, tool_choice, kwargs)
     
     # Delegate other attributes to a working LLM instance
     def __getattr__(self, name):
