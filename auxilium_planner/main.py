@@ -26,22 +26,25 @@ async def lifespan(app: FastAPI):
     
     # Startup
     startup_logger.info(f"🚀 Starting {settings.app_name}")
+    startup_logger.info("🔄 Using SQLAlchemy repositories")
     
-    # Initialize SQLite database
-    from core.database import initialize_database
-    await initialize_database()
-    startup_logger.info("🗄️ SQLite database initialized")
+    # Initialize SQLAlchemy database
+    from core.sqlalchemy_database import initialize_sqlalchemy_database
+    initialize_sqlalchemy_database()
+    startup_logger.info("🗄️ SQLAlchemy database initialized")
     
-    # Remove the problematic profile initialization that causes resets
-    # Profile will be created lazily when first accessed
     startup_logger.info("✅ System ready")
     
     yield
     
     # Shutdown
     shutdown_logger = get_logger("shutdown")
-    from core.database import db_manager
-    await db_manager.close_all_connections()
+    
+    # Close SQLAlchemy connections
+    from core.sqlalchemy_database import close_sqlalchemy_database
+    close_sqlalchemy_database()
+    shutdown_logger.info("🔒 SQLAlchemy database closed")
+    
     shutdown_logger.info("👋 Shutting down")
 
 # Create FastAPI app

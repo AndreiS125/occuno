@@ -588,17 +588,133 @@ const ChatPage: React.FC = () => {
       exchange.agent_messages?.forEach((message: any, messageIndex: number) => {
         console.log(`  📨 Processing message ${messageIndex + 1}:`, message);
         
+        // Helper function to process tool calls from a message
+        const processToolCallsFromMessage = (message: any, isToolResult: boolean = false) => {
+          // Handle tool_calls array (multiple tool calls)
+          if (message.tool_calls && message.tool_calls.length > 0) {
+            message.tool_calls.forEach((toolCall: any) => {
+              const callId = toolCall.call_id || toolCall.id;
+              const toolName = toolCall.name || toolCall.tool_name;
+              
+              if (!callId || !toolName) {
+                console.log('⚠️ Skipping tool call with missing ID or name:', toolCall);
+                return;
+              }
+              
+              if (isToolResult) {
+                // Add tool result
+                const toolResult: ToolResultEvent = {
+                  id: message.id,
+                  tool_call_id: callId,
+                  result: message.content,
+                  timestamp: message.timestamp,
+                  agent: message.agent,
+                  tool_name: toolName
+                };
+                
+                execution.toolResults.push(toolResult);
+                execution.toolCallMap.set(callId, {
+                  tool_name: toolName,
+                  tool_args: message.tool_args || {},
+                  tool_result_parsed: message.tool_result_parsed || null
+                });
+                
+                console.log(`📊 Added tool result: ${toolName}`, {
+                  call_id: callId,
+                  result: message.content?.substring(0, 100)
+                });
+              } else {
+                // Add tool call (if not already processed)
+                if (!processedToolCalls.has(callId)) {
+                  processedToolCalls.add(callId);
+                  
+                  const toolCallEvent: ToolCallEvent = {
+                    id: callId,
+                    tool_name: toolName,
+                    tool_args: message.tool_args || {},
+                    timestamp: message.timestamp,
+                    agent: message.agent
+                  };
+                  
+                  execution.toolCalls.push(toolCallEvent);
+                  console.log(`🔧 Added tool call: ${toolName}`, {
+                    call_id: callId,
+                    args: message.tool_args
+                  });
+                }
+              }
+            });
+          }
+          
+          // Handle single tool call (tool_name + tool_call_id)
+          if (message.tool_name && message.tool_call_id) {
+            const callId = message.tool_call_id;
+            const toolName = message.tool_name;
+            
+            if (isToolResult) {
+              // Add tool result
+              const toolResult: ToolResultEvent = {
+                id: message.id,
+                tool_call_id: callId,
+                result: message.content,
+                timestamp: message.timestamp,
+                agent: message.agent,
+                tool_name: toolName
+              };
+              
+              execution.toolResults.push(toolResult);
+              execution.toolCallMap.set(callId, {
+                tool_name: toolName,
+                tool_args: message.tool_args || {},
+                tool_result_parsed: message.tool_result_parsed || null
+              });
+              
+              console.log(`📊 Added single tool result: ${toolName}`, {
+                call_id: callId,
+                result: message.content?.substring(0, 100)
+              });
+            } else {
+              // Add tool call (if not already processed)
+              if (!processedToolCalls.has(callId)) {
+                processedToolCalls.add(callId);
+                
+                const toolCallEvent: ToolCallEvent = {
+                  id: callId,
+                  tool_name: toolName,
+                  tool_args: message.tool_args || {},
+                  timestamp: message.timestamp,
+                  agent: message.agent
+                };
+                
+                execution.toolCalls.push(toolCallEvent);
+                console.log(`🔧 Added single tool call: ${toolName}`, {
+                  call_id: callId,
+                  args: message.tool_args
+                });
+              }
+            }
+          }
+        };
+        
         switch (message.message_type) {
           case 'thinking':
-            execution.thinkingContent.push({
-              id: message.id,
-              agent: message.agent,
-              content: message.content,
-              timestamp: message.timestamp
-            });
+            // Use thinking_content field, not content field
+            if (message.thinking_content && message.thinking_content.trim()) {
+              execution.thinkingContent.push({
+                id: message.id,
+                agent: message.agent,
+                content: message.thinking_content,
+                timestamp: message.timestamp
+              });
+              console.log(`💭 Added thinking content for ${message.agent}:`, message.thinking_content.substring(0, 100));
+            }
             break;
             
           case 'response':
+            // Process tool calls from response messages
+            processToolCallsFromMessage(message, false);
+            
+            // Add response content if present
             if (message.content && message.content.trim()) {
               execution.agentResponses.push({
                 id: message.id,
@@ -606,44 +722,22 @@ const ChatPage: React.FC = () => {
                 content: message.content,
                 timestamp: message.timestamp
               });
-      }
+              console.log(`💬 Added agent response for ${message.agent}:`, message.content.substring(0, 100));
+            }
             break;
             
           case 'tool_result':
-            if (message.tool_call_id && !processedToolCalls.has(message.tool_call_id)) {
-              processedToolCalls.add(message.tool_call_id);
-              
-              const toolCall: ToolCallEvent = {
-                id: message.tool_call_id,
-                tool_name: message.tool_name || 'unknown',
-                tool_args: message.tool_args || {},
-                timestamp: message.timestamp,
-                agent: message.agent
-              };
-              
-              const toolResult: ToolResultEvent = {
-                id: message.id,
-                tool_call_id: message.tool_call_id,
-                result: message.content,
-                timestamp: message.timestamp,
-                agent: message.agent,
-                tool_name: message.tool_name || 'unknown'
-              };
-              
-              execution.toolCalls.push(toolCall);
-              execution.toolResults.push(toolResult);
-              execution.toolCallMap.set(message.tool_call_id, {
-                tool_name: message.tool_name || 'unknown',
-                tool_args: message.tool_args || {},
-                tool_result_parsed: message.tool_result_parsed || null
-              });
-              
-              console.log(`🔧 Added tool call/result: ${message.tool_name}`, {
-                args: message.tool_args,
-                result: message.content?.substring(0, 100),
-                parsed: message.tool_result_parsed
-              });
-            }
+            // Process tool results
+            processToolCallsFromMessage(message, true);
+            break;
+            
+          case 'tool_call':
+            // Handle explicit tool_call message type
+            processToolCallsFromMessage(message, false);
+            break;
+            
+          default:
+            console.log(`⚠️ Unknown message type: ${message.message_type}`, message);
             break;
         }
       });
@@ -758,6 +852,7 @@ const ChatPage: React.FC = () => {
 
       setExecutions(prev => [...prev, newExecution]);
       setCurrentExecutionId(newExecution.id);
+      console.log('🎯 SET CURRENT EXECUTION ID:', newExecution.id);
 
       // Process streaming events
       while (true) {
@@ -788,9 +883,31 @@ const ChatPage: React.FC = () => {
   }, [inputMessage, isStreaming, currentThreadId, selectedAgent]);
 
   const updateExecutionWithEvent = useCallback(async (event: StreamingEvent) => {
-    setExecutions(prev => prev.map(execution => {
-      // Update the execution that matches the current execution ID, not just the last one
-      if (execution.id !== currentExecutionId) return execution;
+    console.log('🔥 updateExecutionWithEvent called:', {
+      eventType: event.type,
+      eventExecutionId: event.execution_id,
+      event: event
+    });
+    
+    setExecutions(prev => {
+      console.log('🔥 setExecutions callback - prev executions:', prev.length);
+      
+      if (prev.length === 0) {
+        console.log('🔥 No executions to update');
+        return prev;
+      }
+      
+      // Update the most recent execution (last in array) during streaming
+      return prev.map((execution, index) => {
+        const isLastExecution = index === prev.length - 1;
+        console.log('🔥 Checking execution:', execution.id, 'isLast:', isLastExecution);
+        
+        if (!isLastExecution) {
+          console.log('🔥 Skipping non-last execution:', execution.id);
+          return execution;
+        }
+        
+        console.log('🔥 UPDATING LAST EXECUTION with event:', event.type);
 
       const updated = { ...execution };
 
@@ -975,7 +1092,8 @@ const ChatPage: React.FC = () => {
       }
 
       return updated;
-    }));
+      });
+    });
   }, [selectedAgent]);
 
   const toggleExecutionDetails = (executionId: string) => {
@@ -1028,19 +1146,48 @@ const ChatPage: React.FC = () => {
     try {
       // Use parsed data if available, otherwise try to parse the result
       let parsed = toolResultParsed;
+      console.log('🔍 JSON parsing debug:', { toolName, hasResult: !!result, resultLength: result?.length, toolResultParsed });
+      
       if (!parsed && result) {
+        console.log('🔍 Attempting direct JSON.parse on result:', result.substring(0, 100));
         try {
           parsed = JSON.parse(result);
-        } catch (parseError) {
-          console.warn('Failed to parse tool result as JSON:', parseError);
-          // If it's not JSON, treat as plain text
-    return (
-            <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs">
-              <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">Tool completed</p>
-              <p className="text-gray-700 dark:text-gray-300">{result}</p>
+          console.log('✅ Direct JSON.parse succeeded:', parsed);
+        } catch (parseError: any) {
+          console.warn('❌ Direct JSON.parse failed:', parseError.message);
+          // For known tools that should return JSON, try to handle the raw result
+          if (toolName === 'retrieve_objective_by_name' || toolName === 'retrieve_objective_by_id' || 
+              toolName === 'create_objective' || toolName === 'update_objective' || 
+              toolName === 'delete_objective' || toolName === 'save_user_memory') {
+            console.log('🔍 Attempting enhanced JSON extraction for:', toolName);
+            // Try to extract JSON from the string if it's wrapped
+            const jsonMatch = result.match(/\{[\s\S]*\}/);
+            console.log('🔍 JSON match found:', !!jsonMatch, jsonMatch?.[0]?.substring(0, 100));
+            if (jsonMatch) {
+              try {
+                parsed = JSON.parse(jsonMatch[0]);
+                console.log('✅ Successfully extracted JSON from result:', parsed);
+              } catch (extractError: any) {
+                console.warn('❌ Failed to extract JSON from result:', extractError.message);
+                console.log('🔍 Raw matched JSON:', jsonMatch[0]);
+              }
+            } else {
+              console.warn('❌ No JSON match found in result');
+            }
+          } else {
+            console.log('🔍 Tool not in enhanced extraction list:', toolName);
+          }
+          
+          // If still no parsed data, treat as plain text
+          if (!parsed) {
+            return (
+              <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs">
+                <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">Tool completed</p>
+                <p className="text-gray-700 dark:text-gray-300">{result}</p>
               </div>
             );
           }
+        }
       }
       
       console.log('📊 Parsed tool result:', parsed);
@@ -1120,6 +1267,194 @@ const ChatPage: React.FC = () => {
           }
           break;
           
+        case 'retrieve_objective_by_name':
+        case 'retrieve_objective_by_id':
+          if (parsed?.matches && Array.isArray(parsed.matches)) {
+            const matches = parsed.matches;
+            return (
+              <div className="bg-green-50 dark:bg-green-900/20 rounded p-3 text-xs space-y-3">
+                <div className="flex items-start gap-2">
+                  <Search className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium text-green-800 dark:text-green-200">🔍 Objective Search Results</p>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                      {toolName === 'retrieve_objective_by_name' ? `Search: "${toolArgs?.name || 'unknown'}"` : `ID: ${toolArgs?.objective_id || 'unknown'}`} • {matches.length} {matches.length === 1 ? 'match' : 'matches'} found
+                    </p>
+                  </div>
+                </div>
+                
+                {matches.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded border dark:border-gray-700 max-h-64 overflow-y-auto">
+                    <div className="p-3 space-y-2">
+                      {matches.map((obj: any, index: number) => (
+                        <div key={obj.id || index} className="border-b border-gray-100 dark:border-gray-700 last:border-b-0 pb-2 last:pb-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-800 dark:text-gray-200 text-xs">{obj.title}</p>
+                              {obj.description && (
+                                <p className="text-gray-600 dark:text-gray-400 text-xs mt-1 line-clamp-2">{obj.description}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1">
+                                {obj.start_date && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-500">📅 {obj.start_date.split('T')[0]}</span>
+                                )}
+                                {obj.priority_score !== undefined && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-500">⭐ {Math.round(obj.priority_score * 100)}%</span>
+                                )}
+                                {obj.objective_type && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-500">🏷️ {obj.objective_type}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <span className={cn(
+                                "px-2 py-1 rounded font-medium text-xs",
+                                obj.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                                obj.status === 'in_progress' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                                obj.status === 'blocked' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                                'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300'
+                              )}>
+                                {obj.status?.replace(/_/g, ' ') || 'not started'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Show objective ID */}
+                          <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              <strong>ID:</strong> {obj.id}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {matches.length === 0 && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-3 text-center">
+                    <p className="text-gray-600 dark:text-gray-400 text-xs">No objectives found matching the search criteria</p>
+                  </div>
+                )}
+              </div>
+            );
+          } else if (parsed?.success === false) {
+            return (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded p-3 text-xs">
+                <div className="flex items-start gap-2">
+                  <Search className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-200">🔍 Search Complete</p>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                      {parsed.message || 'No objectives found matching the search criteria'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          break;
+          
+        case 'final_response_to_user':
+          // Handle the single-agent final response tool with beautiful custom display
+          if (parsed?.response_content || parsed?.response) {
+            const responseContent = parsed.response_content || parsed.response;
+            const actionSummary = parsed.action_summary || parsed.action_summary_content;
+            const metadata = parsed.metadata || {};
+            const interactionComplete = parsed.interaction_complete !== false;
+            
+            return (
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 text-sm space-y-4 border-2 border-green-200 dark:border-green-700 shadow-lg">
+                <div className="flex items-start gap-4">
+                  <div className="bg-green-100 dark:bg-green-800 rounded-full p-3">
+                    <Sparkles className="w-6 h-6 text-green-600 dark:text-green-300" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="font-bold text-green-800 dark:text-green-200 text-lg">
+                        ✨ Task Complete
+                      </h3>
+                      {interactionComplete && (
+                        <span className="bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200 px-2 py-1 rounded-full text-xs font-medium">
+                          ✓ Finished
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Beautiful response content with custom styling */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-green-100 dark:border-green-800 p-5 shadow-sm">
+                      <div className="flex items-center gap-2 mb-3">
+                        <MessageCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        <span className="text-green-700 dark:text-green-300 font-semibold text-sm">Response</span>
+                      </div>
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeSanitize]}
+                        >
+                          {responseContent}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                    
+                    {/* Action summary with beautiful styling */}
+                    {actionSummary && (
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-blue-800 dark:text-blue-200 font-semibold text-sm">What I Did</span>
+                        </div>
+                        <p className="text-blue-700 dark:text-blue-300 text-sm leading-relaxed">
+                          {actionSummary}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Metadata with beautiful cards */}
+                    {metadata && Object.keys(metadata).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {metadata.response_length && (
+                          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700">
+                            <div className="flex items-center gap-2">
+                              <Activity className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                              <span className="text-purple-700 dark:text-purple-300 font-medium text-xs">Length</span>
+                            </div>
+                            <p className="text-purple-800 dark:text-purple-200 font-bold text-sm mt-1">
+                              {metadata.response_length} chars
+                            </p>
+                          </div>
+                        )}
+                        {metadata.completion_time && (
+                          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                              <span className="text-amber-700 dark:text-amber-300 font-medium text-xs">Completed</span>
+                            </div>
+                            <p className="text-amber-800 dark:text-amber-200 font-bold text-sm mt-1">
+                              {new Date(metadata.completion_time).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        )}
+                        {metadata.has_action_summary !== undefined && (
+                          <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-3 border border-cyan-200 dark:border-cyan-700">
+                            <div className="flex items-center gap-2">
+                              <Brain className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                              <span className="text-cyan-700 dark:text-cyan-300 font-medium text-xs">Summary</span>
+                            </div>
+                            <p className="text-cyan-800 dark:text-cyan-200 font-bold text-sm mt-1">
+                              {metadata.has_action_summary ? '✓ Included' : '✗ None'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          break;
+          
         case 'save_user_memory':
           if (parsed?.success) {
             return (
@@ -1165,10 +1500,13 @@ const ChatPage: React.FC = () => {
           break;
           
         case 'create_objective':
+          console.log('🎯 create_objective case matched!', { parsed, toolName });
           if (parsed?.success && parsed?.id) {
+            console.log('✅ Using ObjectiveDetailsDisplay for ID:', parsed.id);
             // Create a component that fetches and displays the full objective details
             return <ObjectiveDetailsDisplay objectiveId={parsed.id} action="created" />;
           } else if (parsed?.success) {
+            console.log('⚠️ Using fallback display (no ID)');
             // Fallback for create_objective without detailed objective data
             return (
               <div className="bg-green-50 dark:bg-green-900/20 rounded p-3 text-xs">
@@ -1184,10 +1522,12 @@ const ChatPage: React.FC = () => {
                     <p className="text-gray-700 dark:text-gray-300 text-xs">
                       <strong>ID:</strong> {parsed.id}
                     </p>
-                        </div>
-                      )}
+                  </div>
+                )}
               </div>
             );
+          } else {
+            console.log('❌ create_objective case matched but conditions failed:', { success: parsed?.success, id: parsed?.id });
           }
           break;
           
@@ -1358,18 +1698,26 @@ const ChatPage: React.FC = () => {
           break;
           
         default:
+          console.log('⚠️ DEFAULT case reached for tool:', toolName, { parsed, result: result?.substring(0, 200) });
           if (parsed?.success) {
-          return (
+            return (
               <div className="bg-green-50 dark:bg-green-900/20 rounded p-3 text-xs">
                 <div className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium text-green-800 dark:text-green-200">✅ {toolName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Completed</p>
                     <p className="text-gray-600 dark:text-gray-400 mt-1">Operation completed successfully</p>
+                    {/* Show parsed data for debugging */}
+                    <details className="mt-2">
+                      <summary className="text-xs text-gray-500 cursor-pointer">Debug Info</summary>
+                      <pre className="text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1 overflow-auto max-h-32">
+                        {JSON.stringify(parsed, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                </div>
               </div>
-              </div>
-            </div>
-          );
+            );
           } else {
           return (
               <div className="bg-red-50 dark:bg-red-900/20 rounded p-3 text-xs">
@@ -1431,15 +1779,17 @@ const ChatPage: React.FC = () => {
       });
     });
     
-    // Add tool call events
-    execution.toolCalls.forEach(toolCall => {
-      allEvents.push({
-        type: 'tool_call',
-        timestamp: toolCall.timestamp,
-        data: toolCall,
-        agent: toolCall.agent
+    // Add tool call events (filter out final_response_to_user as it's shown as completion cards)
+    execution.toolCalls
+      .filter(toolCall => toolCall.tool_name !== 'final_response_to_user')
+      .forEach(toolCall => {
+        allEvents.push({
+          type: 'tool_call',
+          timestamp: toolCall.timestamp,
+          data: toolCall,
+          agent: toolCall.agent
+        });
       });
-    });
     
     // Sort by timestamp
     allEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());

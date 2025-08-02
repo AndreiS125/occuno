@@ -24,7 +24,6 @@ class EnergyLevel(str, Enum):
     HIGH = "high"
 
 class CouponType(str, Enum):
-    JERK_OFF = "jerk_off"
     SCROLL_INSTAGRAM = "scroll_instagram"
     PLAY_GAMES = "play_games"
     WATCH_YOUTUBE = "watch_youtube"

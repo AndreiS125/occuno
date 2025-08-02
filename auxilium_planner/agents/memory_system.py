@@ -18,9 +18,8 @@ from core.config import settings
 from core.logging_config import get_logger
 from agents.tools.memory_tools import get_user_memories_for_prompt
 
-# Import SQLite repository classes
-from repositories.sqlite_conversation_repository import (
-    SQLiteConversationRepository,
+# Import conversation repository classes from SQLAlchemy
+from repositories.sqlalchemy_conversation_repository import (
     ConversationHistory,
     ExchangeSummary,
     AgentMessage,
@@ -39,22 +38,19 @@ class MemorySystem:
     def __init__(self):
         self.checkpointer = MemorySaver()
         self.logger = logger
-        self.conversation_repo = SQLiteConversationRepository()
+        self._conversation_repo = None  # Lazy initialization
         self.current_thread_id = None
         self.current_exchange_id = None
-        
-        # Keep legacy JSON file path for migration purposes
-        self.legacy_memory_file = Path(settings.data_file_path).parent / "conversation_history.json"
     
-    def _load_legacy_memory_data(self) -> Dict[str, Any]:
-        """Load legacy memory data from JSON file (for migration)."""
-        try:
-            if self.legacy_memory_file.exists():
-                with open(self.legacy_memory_file, 'r') as f:
-                    return json.load(f)
-            return {}
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
+    @property
+    def conversation_repo(self):
+        """Lazy initialization of conversation repository to ensure correct environment variable usage"""
+        if self._conversation_repo is None:
+            from repositories.repository_factory import get_conversation_repository
+            self._conversation_repo = get_conversation_repository()
+        return self._conversation_repo
+    
+
     
     async def get_conversation_history(self, thread_id: str) -> ConversationHistory:
         """Get conversation history for a thread."""
@@ -488,6 +484,10 @@ class MemorySystem:
         # Return a fresh checkpointer instance on each call
         # This prevents state corruption between different runs
         return MemorySaver()
+    
+    async def get_threads_with_details(self) -> List[Dict[str, Any]]:
+        """Get all conversation threads with detailed metadata."""
+        return await self.conversation_repo.get_threads_with_details()
     
     async def get_stats(self) -> Dict[str, Any]:
         """Get conversation statistics."""

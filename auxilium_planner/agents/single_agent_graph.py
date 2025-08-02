@@ -111,9 +111,8 @@ class SingleAgentGraph:
         tool_map = {tool.name: tool for tool in self.all_tools}
         
         async def execute_tools(state: SingleAgentState) -> Dict[str, Any]:
-            # Force database initialization to ensure fresh data
-            from core.database import initialize_database
-            await initialize_database()
+            # Ensure database is initialized
+            from core.sqlalchemy_database import sqlalchemy_db_manager
             
             messages = state.get("messages", [])
             if not messages:
@@ -259,9 +258,8 @@ class SingleAgentGraph:
             exchange_id = await self.memory_system.start_new_exchange(thread_id, user_input)
             state["exchange_id"] = exchange_id
             
-            # Force database reinitialization to ensure we're using the latest data
-            from core.database import initialize_database
-            await initialize_database()
+            # Ensure database is initialized
+            from core.sqlalchemy_database import sqlalchemy_db_manager
             
             # Load conversation history
             conversation_history = await self.memory_system.get_context_for_planner(thread_id)
@@ -325,7 +323,7 @@ class SingleAgentGraph:
                 for msg in existing_messages:
                     messages.append(msg)
                 
-                messages.append(HumanMessage(content="Continue with the task."))
+                #messages.append(HumanMessage(content="Continue (or call final response tool if you're done)"))
             
             # Debug: Log the messages being sent to the agent
             logger.info(f"🔍 Sending {len(messages)} messages to agent:")
@@ -454,8 +452,7 @@ class SingleAgentGraph:
                 thread_id = await self.memory_system.create_new_thread()
             
             # Force database initialization to ensure we're using the latest data
-            from core.database import initialize_database
-            await initialize_database()
+            from core.sqlalchemy_database import sqlalchemy_db_manager
             
             # Generate a unique namespace for this conversation
             checkpoint_ns = self.memory_system.get_checkpoint_namespace(thread_id)
@@ -510,15 +507,26 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
     
     async def emit_event(self, event: Dict[str, Any]):
         """Emit a streaming event"""
+        logger.info(f"📡 EMIT_EVENT called - streaming_active: {self.streaming_active}, event_type: {event.get('type', 'unknown')}")
+        
         if self.streaming_active:
             event['timestamp'] = datetime.now().isoformat()
             event['execution_id'] = self.current_execution_id
             
+            # Debug: Log queue state before putting event
+            queue_size_before = self.event_queue.qsize()
+            logger.info(f"📡 Putting event in queue - queue_size_before: {queue_size_before}, event: {event.get('type', 'unknown')}")
+            
             # Put event in queue with immediate notification
             await self.event_queue.put(event)
             
+            # Debug: Log queue state after putting event
+            queue_size_after = self.event_queue.qsize()
+            logger.info(f"📡 Event put in queue - queue_size_after: {queue_size_after}, queue_id: {id(self.event_queue)}")
+            
             # Also store streaming events in memory system
             if self.current_thread_id and self.current_exchange_id:
+                logger.info(f"📡 Storing event in memory system - thread: {self.current_thread_id}, exchange: {self.current_exchange_id}")
                 await self.memory_system.add_streaming_event(
                     self.current_thread_id,
                     self.current_exchange_id,
@@ -527,6 +535,10 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
                     event.get('content', ''),
                     event
                 )
+            else:
+                logger.warning(f"📡 Not storing in memory - thread_id: {self.current_thread_id}, exchange_id: {self.current_exchange_id}")
+        else:
+            logger.warning(f"📡 Event NOT emitted - streaming_active is False for event: {event.get('type', 'unknown')}")
     
     async def request_stop(self, execution_id: str) -> bool:
         """Request to stop a specific execution"""
@@ -570,6 +582,18 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
         self.final_response_emitted = False
         self.pending_tool_calls = {}  # Reset for new execution
         
+        # Register this execution for stop requests BEFORE starting processing
+        stop_event = asyncio.Event()
+        async with self.stop_lock:
+            self.active_executions[self.current_execution_id] = {
+                'thread_id': thread_id,
+                'exchange_id': None,  # Will be set later
+                'stop_event': stop_event,
+                'start_time': datetime.now().isoformat()
+            }
+            logger.info(f"📝 Registered execution {self.current_execution_id} for stopping")
+            logger.info(f"📝 Active executions now: {list(self.active_executions.keys())}")
+        
         try:
             logger.info(f"🎬 StreamingSingleAgentGraph: Starting processing for: {user_input[:100]}...")
             
@@ -584,16 +608,11 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
             exchange_id = await self.memory_system.start_new_exchange(thread_id, user_input)
             self.current_exchange_id = exchange_id
             
-            # Register this execution for stop requests
-            stop_event = asyncio.Event()
+            # Update execution tracking with exchange_id
             async with self.stop_lock:
-                self.active_executions[self.current_execution_id] = {
-                    'thread_id': thread_id,
-                    'exchange_id': exchange_id,
-                    'stop_event': stop_event
-                }
-                logger.info(f"📝 Registered execution {self.current_execution_id} for stopping")
-                logger.info(f"📝 Active executions now: {list(self.active_executions.keys())}")
+                if self.current_execution_id in self.active_executions:
+                    self.active_executions[self.current_execution_id]['exchange_id'] = exchange_id
+                    logger.info(f"📝 Updated execution {self.current_execution_id} with exchange_id {exchange_id}")
             
             # Emit start event
             await self.emit_event({
@@ -614,7 +633,7 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
             # Override the agent method to capture original thinking content
             self._setup_streaming_overrides()
             
-            # Start processing with streaming and stop checks
+            # Start processing with streaming and stop checking
             final_response = await self._process_with_streaming(user_input, thread_id)
             
             # Check if execution was stopped
@@ -638,8 +657,12 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
             # Only emit final response if we haven't already emitted a real one from final_response_to_user tool
             if not self.final_response_emitted:
                 await self.emit_event({
-                    'type': 'final_response',
+                    'type': 'final_response_to_user',
                     'response': final_response,
+                    'response_content': final_response,
+                    'action_summary': '',
+                    'metadata': {'fallback_response': True},
+                    'interaction_complete': True,
                     'thread_id': thread_id,
                     'exchange_id': exchange_id
                 })
@@ -669,6 +692,8 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
         finally:
             self.streaming_active = False
             self.pending_tool_calls = {}
+            # Always cleanup execution tracking
+            await self.cleanup_execution(self.current_execution_id)
             self._restore_original_methods()
             # Clean up execution tracking
             if hasattr(self, 'current_execution_id') and self.current_execution_id:
@@ -870,10 +895,14 @@ class StreamingSingleAgentGraph(SingleAgentGraph):
                                 final_response_content
                             )
                         
-                        # Emit the actual final response
+                        # Emit the actual final response with correct tool name
                         await self.emit_event({
-                            'type': 'final_response',
+                            'type': 'final_response_to_user',
                             'response': final_response_content,
+                            'response_content': final_response_content,
+                            'action_summary': result_data.get('action_summary', ''),
+                            'metadata': result_data.get('metadata', {}),
+                            'interaction_complete': result_data.get('interaction_complete', True),
                             'agent': agent
                         })
                         # Mark that we've emitted a real final response

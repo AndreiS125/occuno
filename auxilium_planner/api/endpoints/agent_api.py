@@ -24,6 +24,7 @@ router = APIRouter(tags=["agent"])
 # Global agent instances (using string annotations for forward reference)
 agent_graph: Optional['StreamingAgentGraph'] = None
 single_agent_graph: Optional['StreamingSingleAgentGraph'] = None
+streaming_agent_graph: Optional['StreamingSingleAgentGraph'] = None
 
 
 class ChatRequest(BaseModel):
@@ -238,13 +239,18 @@ class StreamingAgentGraph(AgentGraph):
             # Store final response in memory
             await self.memory_system.set_final_response(thread_id, exchange_id, final_response)
             
-            # Only emit final response if we haven't already emitted a real one from final_response_to_user tool
+            # Only emit final response if we haven't already emitted a real one from final_response_to_user
             if not self.final_response_emitted:
+                # Emit the final response event with correct tool name
                 await self.emit_event({
-                    'type': 'final_response',
+                    'type': 'final_response_to_user',
                     'response': final_response,
-                    'thread_id': thread_id,
-                    'exchange_id': exchange_id
+                    'response_content': final_response,
+                    'action_summary': '',
+                    'metadata': {},
+                    'thread_id': self.current_thread_id,
+                    'exchange_id': self.current_exchange_id,
+                    'timestamp': datetime.now().isoformat()
                 })
                 logger.info("📤 Emitted fallback final response")
             else:
@@ -471,10 +477,14 @@ class StreamingAgentGraph(AgentGraph):
                                 final_response_content
                             )
                         
-                        # Emit the actual final response
+                        # Emit the actual final response with correct tool name
                         await self.emit_event({
-                            'type': 'final_response',
+                            'type': 'final_response_to_user',
                             'response': final_response_content,
+                            'response_content': final_response_content,
+                            'action_summary': result_data.get('action_summary', ''),
+                            'metadata': result_data.get('metadata', {}),
+                            'interaction_complete': result_data.get('interaction_complete', True),
                             'agent': agent
                         })
                         # Mark that we've emitted a real final response
@@ -688,17 +698,18 @@ def get_single_agent_graph() -> SingleAgentGraph:
     return single_agent_graph
 
 
-def get_streaming_agent_graph() -> StreamingAgentGraph:
+def get_streaming_agent_graph() -> 'StreamingSingleAgentGraph':
     """
-    Get or initialize the streaming agent graph.
+    Get or initialize the streaming single agent graph.
     
     Returns:
-        StreamingAgentGraph instance
+        StreamingSingleAgentGraph instance
     """
-    global agent_graph
-    if agent_graph is None:
-        agent_graph = StreamingAgentGraph()
-    return agent_graph
+    global single_agent_graph
+    if single_agent_graph is None:
+        single_agent_graph = StreamingSingleAgentGraph()
+        logger.info("🆕 Created new StreamingSingleAgentGraph instance")
+    return single_agent_graph
 
 
 def get_streaming_single_agent_graph() -> StreamingSingleAgentGraph:
@@ -711,6 +722,7 @@ def get_streaming_single_agent_graph() -> StreamingSingleAgentGraph:
     global single_agent_graph
     if single_agent_graph is None:
         single_agent_graph = StreamingSingleAgentGraph()
+        logger.info("🆕 Created new StreamingSingleAgentGraph instance")
     return single_agent_graph
 
 
@@ -844,6 +856,7 @@ async def chat_with_single_agent_streaming(request: StreamingChatRequest) -> Str
             # Get streaming single agent
             agent = get_streaming_single_agent_graph()
             logger.info(f"⚡ Starting single agent streaming for message: {request.message[:100]}...")
+            logger.info(f"⚡ Agent instance ID: {id(agent)}, Event queue ID: {id(agent.event_queue)}, Queue size: {agent.event_queue.qsize()}")
             
             # Process streaming in background
             async def stream_processing():
@@ -868,24 +881,39 @@ async def chat_with_single_agent_streaming(request: StreamingChatRequest) -> Str
             heartbeat_interval = 30  # Send heartbeat every 30 seconds if no events
             
             # Stream events as they come
+            execution_complete = False
+            event_count = 0
+            logger.info(f"📡 Starting event consumption loop - queue_id: {id(agent.event_queue)}")
+            
             while True:
                 try:
+                    # Debug: Log queue state before waiting
+                    queue_size_before = agent.event_queue.qsize()
+                    logger.info(f"📡 Waiting for event - queue_size: {queue_size_before}, events_consumed: {event_count}")
+                    
                     # Use longer timeout for event waiting to avoid unnecessary heartbeats
                     event = await asyncio.wait_for(agent.event_queue.get(), timeout=5.0)
+                    event_count += 1
+                    
+                    # Debug: Log queue state after getting event
+                    queue_size_after = agent.event_queue.qsize()
+                    logger.info(f"📡 GOT EVENT from queue - type: {event.get('type')}, queue_size_after: {queue_size_after}, total_events: {event_count}")
                     
                     # Log event for debugging
                     logger.info(f"📡 Single Agent SSE Event: {event.get('type')} - {event.get('agent', 'system')}")
                     
                     # Format as SSE and yield immediately
                     event_data = json.dumps(event)
+                    logger.info(f"📡 YIELDING SSE data: {event_data[:100]}...")
                     yield f"data: {event_data}\n\n"
                     
                     # Update heartbeat timing
                     last_heartbeat = asyncio.get_event_loop().time()
                     
                     # Check if execution is complete
-                    if event.get('type') in ['execution_complete', 'execution_error']:
+                    if event.get('type') in ['execution_complete', 'execution_error', 'execution_stopped']:
                         logger.info(f"🏁 Single agent streaming complete: {event.get('type')}")
+                        execution_complete = True
                         break
                         
                 except asyncio.TimeoutError:
@@ -897,7 +925,7 @@ async def chat_with_single_agent_streaming(request: StreamingChatRequest) -> Str
                     
                     # Check if processing is done
                     if processing_task.done():
-                        logger.info("🏁 Single agent processing task completed, ending stream")
+                        logger.info("🏁 Single agent processing task completed, draining remaining events")
                         break
                         
                 except Exception as e:
@@ -909,6 +937,35 @@ async def chat_with_single_agent_streaming(request: StreamingChatRequest) -> Str
                     }
                     yield f"data: {json.dumps(error_event)}\n\n"
                     break
+            
+            # Drain any remaining events in the queue after processing completes
+            if not execution_complete:
+                logger.info("🔄 Draining remaining events from queue")
+                drain_attempts = 0
+                max_drain_attempts = 10
+                
+                while drain_attempts < max_drain_attempts:
+                    try:
+                        event = await asyncio.wait_for(agent.event_queue.get(), timeout=0.5)
+                        logger.info(f"📡 Draining SSE Event: {event.get('type')} - {event.get('agent', 'system')}")
+                        
+                        event_data = json.dumps(event)
+                        yield f"data: {event_data}\n\n"
+                        
+                        # Check if this is the completion event
+                        if event.get('type') in ['execution_complete', 'execution_error', 'execution_stopped']:
+                            logger.info(f"🏁 Found completion event during drain: {event.get('type')}")
+                            break
+                            
+                        drain_attempts += 1
+                        
+                    except asyncio.TimeoutError:
+                        # No more events in queue
+                        logger.info(f"🔄 No more events to drain (attempt {drain_attempts + 1})")
+                        break
+                    except Exception as e:
+                        logger.error(f"❌ Error draining events: {e}")
+                        break
             
             # Ensure processing task is complete
             if not processing_task.done():
@@ -1197,59 +1254,11 @@ async def list_conversation_threads() -> Dict[str, Any]:
     try:
         memory_system = MemorySystem()
         
-        # Get conversation statistics from SQLite
+        # Get conversation statistics from SQLAlchemy
         stats = await memory_system.get_stats()
         
-        # Get all conversation threads from SQLite
-        from core.database import db_manager
-        threads = []
-        
-        async with db_manager.get_connection() as conn:
-            cursor = await conn.execute("""
-                SELECT ct.thread_id, ct.created_at, ct.last_updated,
-                       COUNT(ce.id) as message_count,
-                       MAX(ce.timestamp) as latest_exchange_time
-                FROM conversation_threads ct
-                LEFT JOIN conversation_exchanges ce ON ct.thread_id = ce.thread_id
-                GROUP BY ct.thread_id, ct.created_at, ct.last_updated
-                ORDER BY MAX(ce.timestamp) DESC, ct.last_updated DESC
-            """)
-            
-            thread_rows = await cursor.fetchall()
-            
-            for thread_row in thread_rows:
-                thread_id = thread_row['thread_id']
-                
-                # Get latest exchange for preview
-                latest_cursor = await conn.execute("""
-                    SELECT user_message, final_response, planner_summary, executor_summary
-                    FROM conversation_exchanges
-                    WHERE thread_id = ?
-                    ORDER BY timestamp DESC
-                    LIMIT 1
-                """, (thread_id,))
-                
-                latest_exchange = await latest_cursor.fetchone()
-                
-                # Create thread info
-                latest_message = latest_exchange['user_message'] if latest_exchange else ''
-                latest_response = ''
-                if latest_exchange:
-                    latest_response = (latest_exchange['final_response'] or 
-                                     latest_exchange['executor_summary'] or 
-                                     latest_exchange['planner_summary'] or '')
-                
-                thread_info = {
-                    "id": thread_id,
-                    "created_at": thread_row['created_at'],
-                    "last_updated": thread_row['last_updated'],
-                    "message_count": thread_row['message_count'],
-                    "latest_message": latest_message,
-                    "latest_response": latest_response,
-                    "title": (latest_message[:50] + '...' if len(latest_message) > 50 
-                             else latest_message) if latest_message else 'Empty Conversation'
-                }
-                threads.append(thread_info)
+        # Get all conversation threads with details from SQLAlchemy
+        threads = await memory_system.get_threads_with_details()
         
         return {
             "success": True,

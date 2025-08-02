@@ -1,0 +1,10 @@
+{
+  "timestamp": "2025-08-01T14:11:17.149141",
+  "source": "sqlite",
+  "target": "sqlalchemy",
+  "backup_location": "backups/migration_20250801_141117",
+  "settings": {
+    "repository_implementation": "sqlalchemy",
+    "database_implementation": "sqlalchemy"
+  }
+}

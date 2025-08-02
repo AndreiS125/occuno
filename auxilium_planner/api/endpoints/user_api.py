@@ -3,14 +3,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from uuid import UUID
 
-from repositories.sqlite_user_profile_repository import SQLiteUserProfileRepository
+from repositories.repository_factory import get_user_profile_repository
 from services.gamification_service import GamificationService
 
 router = APIRouter(tags=["user"])
 
 # Dependency injection - fixed to use SQLite version
 def get_user_repo():
-    return SQLiteUserProfileRepository()
+    return get_user_profile_repository()
 
 def get_gamification_service():
     return GamificationService()
@@ -148,7 +148,7 @@ class MysteryBoxRequest(BaseModel):
 
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_user_profile(
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Get the current user's profile."""
     profile = await user_repo.ensure_default_profile()
@@ -171,7 +171,7 @@ async def get_user_profile(
 @router.put("/preferences")
 async def update_preferences(
     request: UpdatePreferencesRequest,
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Update user preferences."""
     # Get the current profile
@@ -212,7 +212,7 @@ async def update_preferences(
 
 @router.get("/gamification/stats", response_model=EnhancedGamificationStatsResponse)
 async def get_enhanced_gamification_stats(
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Get comprehensive gamification statistics with coupon system."""
     profile = await user_repo.ensure_default_profile()
@@ -384,7 +384,7 @@ async def get_coupon_definitions(
 
 @router.get("/gamification/legacy-stats")
 async def get_gamification_stats(
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo),
+    user_repo = Depends(get_user_repo),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Get detailed gamification statistics (legacy endpoint with coupon support)."""
@@ -455,7 +455,7 @@ async def get_luck_status(
 ):
     """Get user's current luck factor and breakdown."""
     try:
-        user_repo = SQLiteUserProfileRepository()
+        user_repo = get_user_profile_repository()
         user_profile = await user_repo.ensure_default_profile()
         
         # Calculate current luck boost
@@ -490,7 +490,7 @@ async def update_luck_factor(
 ):
     """Update user's base luck factor (admin/achievement use)."""
     try:
-        user_repo = SQLiteUserProfileRepository()
+        user_repo = get_user_profile_repository()
         user_profile = await user_repo.ensure_default_profile()
         
         new_luck_factor = request.get("luck_factor", user_profile.luck_factor)
@@ -512,7 +512,7 @@ async def update_luck_factor(
 
 @router.get("/reward-config")
 async def get_reward_configuration(
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Get user's custom reward configuration."""
     try:
@@ -567,7 +567,7 @@ async def get_reward_configuration(
 @router.post("/reward-config")
 async def save_reward_configuration(
     request: dict,
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Save user's custom reward configuration."""
     try:
@@ -616,7 +616,7 @@ async def save_reward_configuration(
 
 @router.delete("/reward-config")
 async def delete_reward_configuration(
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Delete user's custom reward configuration and revert to default."""
     try:
@@ -637,7 +637,7 @@ async def delete_reward_configuration(
 @router.post("/reward-config/toggle")
 async def toggle_reward_configuration(
     request: dict,
-    user_repo: SQLiteUserProfileRepository = Depends(get_user_repo)
+    user_repo = Depends(get_user_repo)
 ):
     """Toggle between custom and default reward configuration."""
     try:

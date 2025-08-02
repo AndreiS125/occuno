@@ -15,7 +15,7 @@ import json
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from repositories.sqlite_objective_repository import SQLiteObjectiveRepository as ObjectiveRepository
+from repositories.repository_factory import get_objective_repository
 from domain.models import Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel, RecurringInfo
 
 
@@ -175,7 +175,7 @@ async def retrieve_objective_by_id(objective_id: str, with_children: bool = Fals
         JSON string containing the objective details
     """
     try:
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         objective = await repo.get_by_id(UUID(objective_id))
         
         if not objective:
@@ -218,7 +218,7 @@ async def retrieve_objective_by_name(name: str) -> str:
         JSON string containing matching objectives
     """
     try:
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         all_objectives = await repo.get_all()
         
         # Simple text matching - could be enhanced with fuzzy matching
@@ -260,7 +260,7 @@ async def retrieve_full_objective_tree(objective_id: str) -> str:
         JSON string containing the complete tree structure
     """
     try:
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         root_objective = await repo.get_by_id(UUID(objective_id))
         
         if not root_objective:
@@ -304,7 +304,7 @@ async def retrieve_objectives_by_time_period(start_date: str, end_date: str) -> 
         start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
         end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         all_objectives = await repo.get_all()
         
         matching_objectives = []
@@ -348,7 +348,7 @@ async def retrieve_all_objectives() -> str:
         JSON string containing all objectives
     """
     try:
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         all_objectives = await repo.get_all()
         
         # Use model_dump instead of dict for pydantic v2 compatibility
@@ -417,7 +417,7 @@ async def create_objective(objective_data: str) -> str:
     """
     try:
         data = json.loads(objective_data)
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         
         # Handle recurring info if specified (supports both nested and flat formats)
         recurring_info = None
@@ -516,7 +516,7 @@ async def update_objective(objective_id: str, updates: str) -> str:
     """
     try:
         update_data = json.loads(updates)
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         
         # Convert datetime strings to datetime objects
         for field in ["start_date", "due_date"]:
@@ -570,7 +570,7 @@ async def delete_objective(objective_id: str) -> str:
         JSON string confirming deletion with count of deleted items
     """
     try:
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         
         # First check if the objective exists
         target_objective = await repo.get_by_id(UUID(objective_id))
@@ -635,7 +635,7 @@ async def move_objective_parent(objective_id: str, new_parent_id: Optional[str] 
         JSON string confirming the move with count of affected objectives
     """
     try:
-        repo = ObjectiveRepository()
+        repo = get_objective_repository()
         
         # First check if the objective exists
         target_objective = await repo.get_by_id(UUID(objective_id))

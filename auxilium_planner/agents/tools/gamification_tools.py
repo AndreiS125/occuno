@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 
 from langchain_core.tools import tool
-from repositories.user_profile_repository import UserProfileRepository
+from repositories import UserProfileRepository
 from services.gamification_service import GamificationService
 from core.logging_config import get_logger
 from .objective_tools import safe_json_dumps

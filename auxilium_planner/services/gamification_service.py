@@ -11,14 +11,14 @@ from domain.models import (
     EarnedCoupon, MysteryBoxReward, AchievementDefinition,
     ObjectiveType, UserAchievement
 )
-from repositories.sqlite_user_profile_repository import SQLiteUserProfileRepository
+from repositories.repository_factory import get_user_profile_repository
 from repositories import ObjectiveRepository
 
 class GamificationService:
     """Service for managing coupon-based gamification system with real-world rewards."""
     
     def __init__(self, objective_repo = None, user_repo = None):
-        self.user_repo = user_repo or SQLiteUserProfileRepository()
+        self.user_repo = user_repo or get_user_profile_repository()
         self.objective_repo = objective_repo or ObjectiveRepository()
         self._achievement_definitions = self._load_achievement_definitions()
         self._coupon_definitions = self._load_coupon_definitions()
@@ -26,13 +26,6 @@ class GamificationService:
     def _load_coupon_definitions(self) -> List[CouponDefinition]:
         """Load all available coupon types with their properties."""
         return [
-            CouponDefinition(
-                coupon_type=CouponType.JERK_OFF,
-                display_name="🍆 Jerk Off",
-                description="15 minutes of self-pleasure time",
-                duration_minutes=15,
-                rarity="uncommon"
-            ),
             CouponDefinition(
                 coupon_type=CouponType.SCROLL_INSTAGRAM,
                 display_name="📱 Scroll Instagram",
