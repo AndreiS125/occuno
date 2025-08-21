@@ -42,12 +42,25 @@ export interface RecurringInfo {
   end_date?: string; // ISO date string for when recurrence ends
 }
 
+export interface Calendar {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  color: string;
+  is_default: boolean;
+  is_visible: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Objective {
   id: string;
   title: string;
   description?: string;
   objective_type: ObjectiveType;
   parent_id?: string;
+  calendar_id?: string;  // Calendar assignment
   status: ObjectiveStatus;
   completion_percentage: number;
   created_at: string;

@@ -14,6 +14,7 @@ interface BaseModalProps {
   children: ReactNode;
   className?: string;
   size?: "sm" | "md" | "lg" | "xl";
+  backdrop?: boolean; // whether to show dimming backdrop and lock scroll
 }
 
 const sizeClasses = {
@@ -31,6 +32,7 @@ export function BaseModal({
   children,
   className,
   size = "md",
+  backdrop = true,
 }: BaseModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -52,8 +54,10 @@ export function BaseModal({
     if (!backdrop || !modal || !container) return;
 
     if (isOpen) {
-      // Prevent body scroll
-      document.body.style.overflow = 'hidden';
+      // Prevent body scroll only when backdrop is present
+      if (backdrop) {
+        document.body.style.overflow = 'hidden';
+      }
       
       // Set initial states - just opacity, no scaling
       gsap.set(backdrop, { opacity: 0 });
@@ -95,7 +99,7 @@ export function BaseModal({
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen, isMounted]);
+  }, [isOpen, isMounted, backdrop]);
 
   // Don't render anything during SSR
   if (!isMounted || typeof window === "undefined") return null;
@@ -103,26 +107,29 @@ export function BaseModal({
   const modalContent = (
     <div 
       ref={containerRef}
-      className="fixed inset-0 z-[9999]" 
+      className={cn("fixed inset-0 z-[9999]", !backdrop && "pointer-events-none")} 
       style={{ display: 'none' }}
     >
       {/* Backdrop */}
-      <div
-        ref={backdropRef}
-        onClick={onClose}
-        className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9998]"
-        style={{ position: 'fixed' }}
-      />
+      {backdrop && (
+        <div
+          ref={backdropRef}
+          onClick={onClose}
+          className="fixed inset-0 bg-black/30 z-[9998]"
+          style={{ position: 'fixed' }}
+        />
+      )}
       
       {/* Modal Container */}
-      <div className="fixed inset-0 flex items-center justify-center z-[9999] p-4" style={{ position: 'fixed' }}>
+      <div className={cn("fixed inset-0 flex items-center justify-center z-[9999] p-4", !backdrop && "pointer-events-none")} style={{ position: 'fixed' }}>
         <div
           ref={modalRef}
           className={cn(
             "w-full glass-card border-2 border-primary/20 rounded-2xl shadow-2xl shadow-primary/20 max-h-[90vh] overflow-hidden flex flex-col relative",
             "bg-background/95 backdrop-blur-xl",
             sizeClasses[size],
-            className
+            className,
+            !backdrop && "pointer-events-auto"
           )}
           onClick={(e) => e.stopPropagation()}
         >

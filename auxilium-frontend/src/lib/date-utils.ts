@@ -42,8 +42,19 @@ export const parseDateOnlyToISO = (dateString: string, isEndDate: boolean = fals
 
 /**
  * Parse a local datetime string to ISO format
+ * This preserves the local time as entered by the user (no timezone conversion)
  */
 export const parseLocalDateTimeToISO = (dateTimeString: string): string => {
+  // For datetime-local inputs, we want to preserve the exact time entered
+  // without timezone conversion. We'll append 'Z' to treat it as UTC time
+  // so the backend receives the exact time the user intended.
+  if (dateTimeString.includes('T') && !dateTimeString.includes('Z') && !dateTimeString.includes('+') && !dateTimeString.includes('-', 10)) {
+    // This is a datetime-local format (YYYY-MM-DDTHH:mm)
+    // Append seconds and Z to make it UTC without conversion
+    return dateTimeString + ':00.000Z';
+  }
+  
+  // Fallback for other date formats
   const date = new Date(dateTimeString);
   return date.toISOString();
 };

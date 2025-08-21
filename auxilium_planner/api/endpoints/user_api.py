@@ -5,6 +5,8 @@ from uuid import UUID
 
 from repositories.repository_factory import get_user_profile_repository
 from services.gamification_service import GamificationService
+from api.endpoints.auth_api import get_current_user_dependency
+from core.models import UserProfile
 
 router = APIRouter(tags=["user"])
 
@@ -38,47 +40,6 @@ class UpdatePreferencesRequest(BaseModel):
     timezone: Optional[str] = None
     preferred_work_hours: Optional[Dict[str, Any]] = None
 
-class CouponResponse(BaseModel):
-    id: str
-    type: str
-    display_name: str
-    description: str
-    duration_minutes: int
-    rarity: str
-    expires_at: str
-    hours_left: float
-
-class MysteryBoxResponse(BaseModel):
-    success: bool
-    reward_type: Optional[str] = None
-    reward_description: Optional[str] = None
-    coupons_earned: Optional[int] = None
-    coupon_descriptions: Optional[List[str]] = None
-    boxes_remaining: Optional[int] = None
-    celebration: Optional[str] = None
-    message: Optional[str] = None
-    wheel_result: Optional[Dict[str, Any]] = None
-    backend_selection: Optional[Dict[str, Any]] = None  # NEW: Backend selection for frontend wheel
-
-class DailyStatusResponse(BaseModel):
-    current_coupons: int
-    total_coupons_earned: int
-    total_coupons_used: int
-    mystery_box_progress: int
-    mystery_box_needed: int
-    mystery_box_progress_pct: float
-    current_streak: int
-    daily_tasks_completed: int
-    daily_task_goal: int
-    weekly_rank: int
-    mystery_boxes_available: int
-    daily_bonus_available: bool
-    daily_bonus_message: str
-    decay_warning: bool
-    days_inactive: int
-    psychological_hooks: Dict[str, Any]
-    urgency_factors: Dict[str, bool]
-
 class EnhancedGamificationStatsResponse(BaseModel):
     # Core coupon stats
     current_coupons: int
@@ -86,17 +47,17 @@ class EnhancedGamificationStatsResponse(BaseModel):
     total_coupons_used: int
     coupon_usage_rate: float
     
-    # XP/Level system - NEW
+    # XP/Level system
     experience_points: int
     level: int
     experience_to_next_level: int
     total_experience_earned: int
     progress_to_next_level: float  # 0.0 to 1.0
     
-    # Mystery box system (now level-based)
-    mystery_box_progress: int  # Legacy
-    mystery_box_needed: int    # Legacy
-    mystery_box_progress_pct: float  # Legacy
+    # Mystery box system
+    mystery_box_progress: int
+    mystery_box_needed: int
+    mystery_box_progress_pct: float
     mystery_boxes_earned: int
     mystery_boxes_opened: int
     mystery_boxes_available: int
@@ -136,22 +97,15 @@ class EnhancedGamificationStatsResponse(BaseModel):
     total_achievements: int
     recent_achievements: List[Dict[str, Any]]
 
-class CouponDefinitionResponse(BaseModel):
-    coupon_type: str
-    display_name: str
-    description: str
-    duration_minutes: int
-    rarity: str
-
-class MysteryBoxRequest(BaseModel):
-    frontend_choice: Optional[Dict[str, Any]] = Field(None, description="Frontend wheel choice data")
-
 @router.get("/profile", response_model=UserProfileResponse)
-async def get_user_profile(
+def get_user_profile(
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
     """Get the current user's profile."""
-    profile = await user_repo.ensure_default_profile()
+    profile = user_repo.get_by_id(current_user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
     
     # Extract preferences if they exist
     preferences = profile.preferred_work_hours or {}
@@ -161,21 +115,23 @@ async def get_user_profile(
         username=profile.username,
         overall_score=profile.overall_score,
         current_streak_days=profile.current_streak_days,
-        achievements_count=len(profile.achievements),
+        achievements_count=len(profile.achievements) if profile.achievements else 0,
         preferred_work_hours=profile.preferred_work_hours,
-        name=preferences.get("name", profile.username),
-        email=preferences.get("email", ""),
+        name=preferences.get("name", profile.full_name or profile.username),
+        email=preferences.get("email", profile.email or ""),
         preferences=preferences
     )
 
 @router.put("/preferences")
-async def update_preferences(
+def update_preferences(
     request: UpdatePreferencesRequest,
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
     """Update user preferences."""
-    # Get the current profile
-    profile = await user_repo.ensure_default_profile()
+    profile = user_repo.get_by_id(current_user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
     
     # Get existing preferences or create new dict
     preferences = profile.preferred_work_hours or {}
@@ -184,56 +140,43 @@ async def update_preferences(
     updates_dict = request.dict(exclude_unset=True)
     
     # Store all settings in the preferred_work_hours JSON field
-    # (since that's what we have available in the schema)
-    if "name" in updates_dict:
-        preferences["name"] = updates_dict["name"]
-    if "email" in updates_dict:
-        preferences["email"] = updates_dict["email"]
-    if "theme" in updates_dict:
-        preferences["theme"] = updates_dict["theme"]
-    if "notifications_enabled" in updates_dict:
-        preferences["notifications_enabled"] = updates_dict["notifications_enabled"]
-    if "daily_goal_tasks" in updates_dict:
-        preferences["daily_goal_tasks"] = updates_dict["daily_goal_tasks"]
-    if "working_hours_start" in updates_dict:
-        preferences["working_hours_start"] = updates_dict["working_hours_start"]
-    if "working_hours_end" in updates_dict:
-        preferences["working_hours_end"] = updates_dict["working_hours_end"]
-    if "timezone" in updates_dict:
-        preferences["timezone"] = updates_dict["timezone"]
+    for key, value in updates_dict.items():
+        preferences[key] = value
     
     # Update the profile with new preferences
-    profile = await user_repo.update({"preferred_work_hours": preferences})
-    
-    if not profile:
-        raise HTTPException(status_code=404, detail="User profile not found")
+    profile.preferred_work_hours = preferences
+    profile = user_repo.update(profile)
     
     return {"success": True, "message": "Preferences updated", "preferences": preferences}
 
 @router.get("/gamification/stats", response_model=EnhancedGamificationStatsResponse)
-async def get_enhanced_gamification_stats(
+def get_enhanced_gamification_stats(
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
     """Get comprehensive gamification statistics with coupon system."""
-    profile = await user_repo.ensure_default_profile()
+    profile = user_repo.get_by_id(current_user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
     
     # Calculate additional stats
-    current_coupons = len([c for c in profile.earned_coupons if not c.is_used])
+    earned_coupons = profile.earned_coupons or []
+    current_coupons = len([c for c in earned_coupons if not c.is_used])
     coupon_usage_rate = profile.total_coupons_used / max(profile.total_coupons_earned, 1)
     mystery_box_progress_pct = (profile.mystery_box_progress / profile.points_per_mystery_box) * 100
     
     # Calculate XP progress percentage
     progress_to_next_level = profile.experience_points / profile.experience_to_next_level if profile.experience_to_next_level > 0 else 0.0
     
-    # Get recent achievements
-    gamification = GamificationService()
-    achievement_definitions = gamification._load_achievement_definitions()
+    # Get achievements from user profile directly
+    achievement_definitions = profile.achievement_definitions or []
     
     recent_achievements = []
-    for achievement in profile.achievements[-5:]:  # Last 5 achievements
-        # Find the achievement definition to get name and points
+    user_achievements = profile.achievements or []
+    for achievement in user_achievements[-5:]:  # Last 5 achievements
+        # Find the achievement definition to get name and points (match by achievement_id string)
         achievement_def = next(
-            (ad for ad in achievement_definitions if ad.id == achievement.achievement_id), 
+            (ad for ad in achievement_definitions if ad.achievement_id == achievement.achievement_id),
             None
         )
         if achievement_def:
@@ -251,14 +194,14 @@ async def get_enhanced_gamification_stats(
         total_coupons_used=profile.total_coupons_used,
         coupon_usage_rate=coupon_usage_rate,
         
-        # XP/Level system - NEW
+        # XP/Level system
         experience_points=profile.experience_points,
         level=profile.level,
         experience_to_next_level=profile.experience_to_next_level,
         total_experience_earned=profile.total_experience_earned,
         progress_to_next_level=progress_to_next_level,
         
-        # Mystery box system (now level-based)
+        # Mystery box system
         mystery_box_progress=profile.mystery_box_progress,
         mystery_box_needed=profile.points_per_mystery_box,
         mystery_box_progress_pct=mystery_box_progress_pct,
@@ -298,165 +241,21 @@ async def get_enhanced_gamification_stats(
         progress_decay_warning=profile.progress_decay_warning,
         
         # Achievements
-        total_achievements=len(profile.achievements),
+        total_achievements=len(user_achievements),
         recent_achievements=recent_achievements
     )
 
-@router.get("/gamification/daily-status", response_model=DailyStatusResponse)
-async def get_daily_status(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Get daily status with coupon system and psychological hooks."""
-    try:
-        status = await gamification.get_daily_status()
-        return DailyStatusResponse(**status)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching daily status: {str(e)}")
-
-@router.post("/gamification/mystery-box", response_model=MysteryBoxResponse)
-async def open_mystery_box(
-    request: MysteryBoxRequest,
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Open a mystery box and receive coupon rewards."""
-    try:
-        result = await gamification.open_mystery_box(frontend_choice=request.frontend_choice)
-        return MysteryBoxResponse(**result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error opening mystery box: {str(e)}")
-
-@router.post("/gamification/daily-bonus")
-async def claim_daily_bonus(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Claim daily bonus and receive coupon rewards."""
-    try:
-        result = await gamification.claim_daily_bonus()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error claiming daily bonus: {str(e)}")
-
-@router.get("/coupons", response_model=Dict[str, Any])
-async def get_available_coupons(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Get user's available coupons with expiration info."""
-    try:
-        result = await gamification.get_available_coupons()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching coupons: {str(e)}")
-
-@router.post("/coupons/{coupon_id}/use")
-async def use_coupon(
-    coupon_id: str,
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Use a coupon to redeem the reward."""
-    try:
-        coupon_uuid = UUID(coupon_id)
-        result = await gamification.use_coupon(coupon_uuid)
-        return result
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid coupon ID format")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error using coupon: {str(e)}")
-
-@router.get("/coupons/definitions", response_model=List[CouponDefinitionResponse])
-async def get_coupon_definitions(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Get all available coupon types and their properties."""
-    try:
-        definitions = await gamification.get_coupon_definitions()
-        return [
-            CouponDefinitionResponse(
-                coupon_type=coupon_def.coupon_type.value,
-                display_name=coupon_def.display_name,
-                description=coupon_def.description,
-                duration_minutes=coupon_def.duration_minutes,
-                rarity=coupon_def.rarity
-            )
-            for coupon_def in definitions
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching coupon definitions: {str(e)}")
-
-@router.get("/gamification/legacy-stats")
-async def get_gamification_stats(
-    user_repo = Depends(get_user_repo),
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Get detailed gamification statistics (legacy endpoint with coupon support)."""
-    profile = await user_repo.ensure_default_profile()
-    
-    # Current active coupons
-    current_coupons = len([c for c in profile.earned_coupons if not c.is_used])
-    
-    return {
-        "overall_score": profile.overall_score,
-        "current_coupons": current_coupons,
-        "total_coupons_earned": profile.total_coupons_earned,
-        "total_coupons_used": profile.total_coupons_used,
-        "current_streak": {
-            "days": profile.current_streak_days,
-            "last_check": profile.last_streak_check_date.isoformat() if profile.last_streak_check_date else None
-        },
-        "achievements": {
-            "total_unlocked": len(profile.achievements),
-            "recent": [
-                {
-                    "achievement_id": str(ach.achievement_id),
-                    "unlocked_at": ach.unlocked_at.isoformat()
-                }
-                for ach in sorted(
-                    profile.achievements, 
-                    key=lambda x: x.unlocked_at, 
-                    reverse=True
-                )[:5]  # Last 5 achievements
-            ]
-        }
-    }
-
-@router.post("/gamification/check-streak")
-async def check_and_update_streak(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Manually check and update streak status."""
-    try:
-        user_repo = get_user_repo()
-        profile = await user_repo.ensure_default_profile()
-        result = await gamification._update_streak_system(profile)
-        await user_repo.save_profile(profile)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating streak: {str(e)}")
-
-@router.get("/gamification/achievements")
-async def get_achievement_definitions(
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Get all available achievement definitions."""
-    achievements = await gamification.get_user_achievements()
-    return [
-        {
-            "id": ach.id,
-            "name": ach.name,
-            "description": ach.description,
-            "points_value": ach.points_value,
-            "criteria_code": ach.criteria_code
-        }
-        for ach in achievements
-    ] 
-
 @router.get("/luck-status")
-async def get_luck_status(
+def get_luck_status(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    user_repo = Depends(get_user_repo),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Get user's current luck factor and breakdown."""
     try:
-        user_repo = get_user_profile_repository()
-        user_profile = await user_repo.ensure_default_profile()
+        user_profile = user_repo.get_by_id(current_user.id)
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
         # Calculate current luck boost
         luck_boost = gamification._calculate_luck_boost(user_profile)
@@ -483,46 +282,26 @@ async def get_luck_status(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting luck status: {str(e)}")
 
-@router.post("/luck-factor")
-async def update_luck_factor(
-    request: dict,
-    gamification: GamificationService = Depends(get_gamification_service)
-):
-    """Update user's base luck factor (admin/achievement use)."""
-    try:
-        user_repo = get_user_profile_repository()
-        user_profile = await user_repo.ensure_default_profile()
-        
-        new_luck_factor = request.get("luck_factor", user_profile.luck_factor)
-        
-        # Validate luck factor range
-        if new_luck_factor < 0.1 or new_luck_factor > 3.0:
-            raise HTTPException(status_code=400, detail="Luck factor must be between 0.1 and 3.0")
-        
-        user_profile.luck_factor = new_luck_factor
-        await user_repo.save_profile(user_profile)
-        
-        return {
-            "success": True,
-            "message": f"Luck factor updated to {new_luck_factor:.2f}",
-            "new_luck_factor": new_luck_factor
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating luck factor: {str(e)}") 
-
 @router.get("/reward-config")
-async def get_reward_configuration(
+def get_reward_configuration(
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
     """Get user's custom reward configuration."""
     try:
-        profile = await user_repo.ensure_default_profile()
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
         if profile.custom_reward_config and profile.use_custom_rewards:
+            # Handle both dict and SQLModel cases
+            config_data = profile.custom_reward_config
+            if hasattr(config_data, 'dict'):
+                config_data = config_data.dict()
             return {
                 "success": True,
                 "has_custom_config": True,
-                "config": profile.custom_reward_config.dict(),
+                "config": config_data,
                 "is_active": profile.use_custom_rewards
             }
         else:
@@ -564,99 +343,216 @@ async def get_reward_configuration(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting reward config: {str(e)}")
 
-@router.post("/reward-config")
-async def save_reward_configuration(
-    request: dict,
+@router.get("/gamification/daily-status")
+def get_daily_status(
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
-    """Save user's custom reward configuration."""
+    """Get user's daily gamification status."""
     try:
-        profile = await user_repo.ensure_default_profile()
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
-        from domain.models import CustomRewardConfiguration, CustomRewardTier
-        
-        # Parse the custom configuration from request
-        config_data = request.get("config", {})
-        
-        custom_config = CustomRewardConfiguration(
-            user_id=profile.id,
-            configuration_name=config_data.get("name", "My Custom Wheel"),
-            reward_tiers=[
-                CustomRewardTier(
-                    tier_name=tier["tier_name"],
-                    probability=tier["probability"],
-                    colors=tier.get("colors", []),
-                    glow_color=tier.get("glow_color", "#22c5c2"),
-                    segments=tier.get("segments", [])
-                )
-                for tier in config_data.get("tiers", [])
-            ]
-        )
-        
-        # Validate probabilities sum to 1.0
-        total_prob = sum(tier.probability for tier in custom_config.reward_tiers)
-        if abs(total_prob - 1.0) > 0.01:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Probabilities must sum to 1.0 (currently {total_prob:.3f})"
-            )
-        
-        profile.custom_reward_config = custom_config
-        profile.use_custom_rewards = request.get("use_custom_rewards", True)
-        
-        await user_repo.save_profile(profile)
+        earned_coupons = profile.earned_coupons or []
+        current_coupons = len([c for c in earned_coupons if not c.is_used])
+        mystery_box_progress_pct = (profile.mystery_box_progress / profile.points_per_mystery_box) * 100
         
         return {
-            "success": True,
-            "message": "Custom reward configuration saved successfully",
-            "config": custom_config.dict()
+            "current_coupons": current_coupons,
+            "total_coupons_earned": profile.total_coupons_earned,
+            "total_coupons_used": profile.total_coupons_used,
+            "mystery_box_progress": profile.mystery_box_progress,
+            "mystery_box_needed": profile.points_per_mystery_box,
+            "mystery_box_progress_pct": mystery_box_progress_pct,
+            "current_streak": profile.current_streak_days,
+            "daily_tasks_completed": profile.daily_tasks_completed_today,
+            "daily_task_goal": profile.daily_task_goal,
+            "weekly_rank": profile.rank_this_week,
+            "mystery_boxes_available": profile.mystery_boxes_earned - profile.mystery_boxes_opened,
+            "daily_bonus_available": profile.daily_bonus_available,
+            "daily_bonus_message": "Collect your daily bonus!" if profile.daily_bonus_available else "Come back tomorrow!",
+            "decay_warning": profile.progress_decay_warning,
+            "days_inactive": profile.days_since_last_activity,
+            "psychological_hooks": {},
+            "urgency_factors": {}
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving reward config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting daily status: {str(e)}")
 
-@router.delete("/reward-config")
-async def delete_reward_configuration(
+@router.get("/coupons")
+def get_available_coupons(
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
-    """Delete user's custom reward configuration and revert to default."""
+    """Get all available (unused) coupons for the user."""
     try:
-        profile = await user_repo.ensure_default_profile()
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
-        profile.custom_reward_config = None
-        profile.use_custom_rewards = False
+        earned_coupons = profile.earned_coupons or []
+        available_coupons = [c for c in earned_coupons if not c.is_used]
         
-        await user_repo.save_profile(profile)
-        
-        return {
-            "success": True,
-            "message": "Custom reward configuration deleted. Reverted to default configuration."
-        }
+        return [
+            {
+                "id": str(coupon.id),
+                "type": coupon.coupon_type,
+                "display_name": coupon.coupon_type.replace("_", " ").title(),
+                "description": f"Enjoy some {coupon.coupon_type.replace('_', ' ')}",
+                "duration_minutes": 30,  # Default duration
+                "rarity": "common",
+                # Use correct model field name for expiration
+                "expires_at": coupon.expiration_date.isoformat() if coupon.expiration_date else None,
+                "hours_left": 24.0  # Default hours left
+            }
+            for coupon in available_coupons
+        ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting reward config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting coupons: {str(e)}")
 
-@router.post("/reward-config/toggle")
-async def toggle_reward_configuration(
-    request: dict,
+@router.post("/coupons/{coupon_id}/use")
+def use_coupon(
+    coupon_id: str,
+    current_user: UserProfile = Depends(get_current_user_dependency),
     user_repo = Depends(get_user_repo)
 ):
-    """Toggle between custom and default reward configuration."""
+    """Use a specific coupon."""
     try:
-        profile = await user_repo.ensure_default_profile()
+        from uuid import UUID
+        coupon_uuid = UUID(coupon_id)
         
-        if not profile.custom_reward_config:
-            raise HTTPException(
-                status_code=400, 
-                detail="No custom reward configuration exists. Create one first."
-            )
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
-        profile.use_custom_rewards = request.get("use_custom_rewards", not profile.use_custom_rewards)
+        # Find the coupon
+        earned_coupons = profile.earned_coupons or []
+        coupon = next((c for c in earned_coupons if c.id == coupon_uuid and not c.is_used), None)
         
-        await user_repo.save_profile(profile)
+        if not coupon:
+            raise HTTPException(status_code=404, detail="Coupon not found or already used")
+        
+        # Mark as used
+        coupon_used = user_repo.use_coupon(coupon_uuid)
+        if not coupon_used:
+            raise HTTPException(status_code=400, detail="Failed to use coupon")
+        
+        return {"success": True, "message": "Coupon used successfully"}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid coupon ID")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error using coupon: {str(e)}")
+
+@router.get("/coupons/definitions")
+def get_coupon_definitions(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    user_repo = Depends(get_user_repo)
+):
+    """Get coupon type definitions."""
+    try:
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+
+        # Ensure definitions exist for this user (seed if missing)
+        try:
+            ensured_defs = user_repo.ensure_coupon_definitions(current_user.id)
+        except Exception:
+            ensured_defs = None
+
+        coupon_definitions = ensured_defs or (profile.coupon_definitions or [])
+        
+        return [
+            {
+                "coupon_type": defn.coupon_type,
+                "display_name": defn.display_name,
+                "description": defn.description,
+                "duration_minutes": defn.duration_minutes,
+                "rarity": defn.rarity
+            }
+            for defn in coupon_definitions
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting coupon definitions: {str(e)}")
+
+@router.post("/gamification/mystery-box")
+def open_mystery_box(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Open a mystery box."""
+    try:
+        result = gamification.open_mystery_box(current_user.id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error opening mystery box: {str(e)}")
+
+@router.get("/gamification/weekly-challenge")
+def get_weekly_challenge(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    user_repo = Depends(get_user_repo)
+):
+    """Get weekly challenge progress."""
+    try:
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
         return {
-            "success": True,
-            "message": f"Switched to {'custom' if profile.use_custom_rewards else 'default'} reward configuration",
-            "is_using_custom": profile.use_custom_rewards
+            "progress": profile.weekly_challenge_progress,
+            "target": profile.weekly_challenge_target,
+            "completed": profile.weekly_challenge_completed,
+            "progress_pct": (profile.weekly_challenge_progress / profile.weekly_challenge_target) * 100 if profile.weekly_challenge_target > 0 else 0
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error toggling reward config: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Error getting weekly challenge: {str(e)}")
+
+@router.post("/gamification/daily-bonus")
+def claim_daily_bonus(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Claim daily bonus."""
+    try:
+        result = gamification.claim_daily_bonus(current_user.id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error claiming daily bonus: {str(e)}")
+
+@router.post("/gamification/check-streak")
+def check_and_update_streak(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Manually check and update streak status."""
+    try:
+        user_repo = get_user_repo()
+        profile = user_repo.get_by_id(current_user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        result = gamification._update_streak_system(profile)
+        user_repo.update(profile)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating streak: {str(e)}")
+
+# Authenticated: achievement definitions are user-scoped
+@router.get("/gamification/achievements")
+def get_achievement_definitions(
+    current_user: UserProfile = Depends(get_current_user_dependency),
+    gamification: GamificationService = Depends(get_gamification_service)
+):
+    """Get all available achievement definitions for the authenticated user."""
+    achievements = gamification.get_user_achievements(current_user.id)
+    return [
+        {
+            "id": ach.id,
+            "name": ach.name,
+            "description": ach.description,
+            "points_value": ach.points_value,
+            "criteria_code": ach.criteria_code
+        }
+        for ach in achievements
+    ]

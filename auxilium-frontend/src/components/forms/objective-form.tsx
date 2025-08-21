@@ -16,8 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Clock, CalendarIcon, Battery, BatteryLow, Zap, Trash2, CheckCircle } from "lucide-react";
-import { Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel } from "@/types";
+import { Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel, Calendar } from "@/types";
 import { objectivesApi } from "@/lib/api";
+import { useCalendars } from "@/hooks/use-calendars";
 import { 
   formatDateTimeLocal, 
   formatDateOnly, 
@@ -35,11 +36,13 @@ interface ObjectiveFormData {
   priority_score: number;
   complexity_score: number;
   parent_id: string | null;
+  calendar_id: string | null;  // Calendar assignment
   start_date: string;  // Contains date for all-day events
   due_date: string;    // Contains date for all-day events
   start_time: string;  // Contains datetime for timed events
   end_time: string;    // Contains datetime for timed events
   all_day: boolean;
+  is_timed: boolean;   // Whether this objective is time-bound
   location?: string;
   is_recurring: boolean;
   status: ObjectiveStatus;
@@ -80,6 +83,9 @@ export function ObjectiveForm({
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Calendar management
+  const { calendars, fetchCalendars, getDefaultCalendar } = useCalendars();
+  
   const [formData, setFormData] = useState<ObjectiveFormData>(() => {
     const defaultType = defaultToTask ? ObjectiveType.TASK : ObjectiveType.MAIN_OBJECTIVE;
     
@@ -111,22 +117,39 @@ export function ObjectiveForm({
         endTime = data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : "";
       }
       
+      // Normalize enum-like string fields to lowercase to match our TS enums
+      // Also map legacy 'pending' -> 'not_started' to avoid blank Select value
+      const rawStatusInit = typeof data.status === 'string'
+        ? (data.status as string).toLowerCase()
+        : (data.status || ObjectiveStatus.NOT_STARTED);
+      const normalizedStatus: ObjectiveStatus = (rawStatusInit === 'pending'
+        ? ObjectiveStatus.NOT_STARTED
+        : (rawStatusInit as ObjectiveStatus));
+      const normalizedEnergy: EnergyLevel = typeof data.energy_requirement === 'string'
+        ? (data.energy_requirement as string).toLowerCase() as EnergyLevel
+        : (data.energy_requirement || EnergyLevel.MEDIUM);
+      const normalizedType: ObjectiveType = typeof data.objective_type === 'string'
+        ? (data.objective_type as string).toLowerCase() as ObjectiveType
+        : (data.objective_type || defaultType);
+
       return {
         title: data.title || "",
         description: data.description || "",
-        objective_type: data.objective_type || defaultType,
-        energy_requirement: data.energy_requirement || EnergyLevel.MEDIUM,
+        objective_type: normalizedType,
+        energy_requirement: normalizedEnergy,
         priority_score: data.priority_score ?? 0.5,
         complexity_score: data.complexity_score ?? 0.5,
         parent_id: data.parent_id || null,
+        calendar_id: data.calendar_id || null,
         start_date: startDate,
         due_date: dueDate,
         start_time: startTime,
         end_time: endTime,
         all_day: data.all_day ?? false,
+        is_timed: data.is_timed ?? true,
         location: data.location || "",
         is_recurring: !!(data.is_recurring || objRecurring),
-        status: data.status || ObjectiveStatus.NOT_STARTED,
+        status: normalizedStatus,
         completion_percentage: data.completion_percentage || 0,
         recurring: objRecurring ? {
           frequency: objRecurring.frequency || "daily",
@@ -152,11 +175,13 @@ export function ObjectiveForm({
       priority_score: 0.5,
       complexity_score: 0.5,
       parent_id: null,
+      calendar_id: null,
       start_date: "",
       due_date: "",
       start_time: "",
       end_time: "",
       all_day: false,
+      is_timed: true,
       location: "",
       is_recurring: false,
       status: ObjectiveStatus.NOT_STARTED,
@@ -205,22 +230,37 @@ export function ObjectiveForm({
         endTime = data.end_time || (data.due_date ? formatDateTimeLocal(new Date(data.due_date)) : "");
       }
       
+      // Normalize enum-like string fields to lowercase to match our TS enums
+      // Handle legacy/blank status values: map '' or undefined -> not_started; 'pending' -> not_started
+      const rawStatusInitStr = typeof data.status === 'string' ? (data.status as string).trim().toLowerCase() : '';
+      const normalizedStatus: ObjectiveStatus = (rawStatusInitStr === ''
+        ? ObjectiveStatus.NOT_STARTED
+        : (rawStatusInitStr === 'pending' ? ObjectiveStatus.NOT_STARTED : (rawStatusInitStr as ObjectiveStatus)));
+      const normalizedEnergy: EnergyLevel = typeof data.energy_requirement === 'string'
+        ? (data.energy_requirement as string).toLowerCase() as EnergyLevel
+        : (data.energy_requirement || EnergyLevel.MEDIUM);
+      const normalizedType: ObjectiveType = typeof data.objective_type === 'string'
+        ? (data.objective_type as string).toLowerCase() as ObjectiveType
+        : (data.objective_type || (defaultToTask ? ObjectiveType.TASK : ObjectiveType.MAIN_OBJECTIVE));
+
       setFormData({
         title: data.title || "",
         description: data.description || "",
-        objective_type: data.objective_type || (defaultToTask ? ObjectiveType.TASK : ObjectiveType.MAIN_OBJECTIVE),
-        energy_requirement: data.energy_requirement || EnergyLevel.MEDIUM,
+        objective_type: normalizedType,
+        energy_requirement: normalizedEnergy,
         priority_score: data.priority_score ?? 0.5,
         complexity_score: data.complexity_score ?? 0.5,
         parent_id: data.parent_id || null,
+        calendar_id: data.calendar_id || null,
         start_date: startDate,
         due_date: dueDate,
         start_time: startTime,
         end_time: endTime,
         all_day: data.all_day ?? false,
+        is_timed: data.is_timed ?? true,
         location: data.location || "",
         is_recurring: !!(data.is_recurring || objRecurring),
-        status: data.status || ObjectiveStatus.NOT_STARTED,
+        status: normalizedStatus,
         completion_percentage: data.completion_percentage || 0,
         recurring: objRecurring ? {
           frequency: objRecurring.frequency || "daily",
@@ -239,7 +279,7 @@ export function ObjectiveForm({
     }
   }, [initialData, defaultToTask]);
 
-  // Load parent objectives
+  // Load parent objectives and calendars
   useEffect(() => {
     objectivesApi.list()
       .then(({ data }) => {
@@ -250,7 +290,10 @@ export function ObjectiveForm({
       .catch((err) => {
         console.error("Failed to load objectives:", err);
       });
-  }, []);
+    
+    // Load calendars
+    fetchCalendars();
+  }, [fetchCalendars]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,8 +306,8 @@ export function ObjectiveForm({
         throw new Error("Title is required");
       }
 
-      // For tasks, time is required unless it's an all-day event
-      if (formData.objective_type === ObjectiveType.TASK) {
+      // For tasks, time is required only if it's timed and not all-day
+      if (formData.objective_type === ObjectiveType.TASK && formData.is_timed) {
         if (showTimeFields && !formData.all_day && (!formData.start_time || !formData.end_time)) {
           throw new Error("Start time and end time are required for timed tasks");
         }
@@ -279,37 +322,42 @@ export function ObjectiveForm({
         priority_score: formData.priority_score,
         complexity_score: formData.complexity_score,
         parent_id: formData.parent_id || undefined,
+        calendar_id: formData.calendar_id || undefined,
         status: formData.status,
         completion_percentage: formData.completion_percentage,
         all_day: formData.all_day,  // Explicit all-day flag
+        is_timed: formData.is_timed,  // Whether this objective is time-bound
       };
 
-      // Handle date/time fields based on all_day flag
-      if (formData.all_day) {
-        // All-day event - use date-only format with midnight times
-        if (formData.start_date) {
-          submitData.start_date = parseDateOnlyToISO(formData.start_date);
-        }
-        if (formData.due_date) {
-          submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
-        }
-      } else if (showTimeFields && (formData.start_time || formData.end_time)) {
-        // Timed event - use datetime format
-        if (formData.start_time) {
-          submitData.start_date = parseLocalDateTimeToISO(formData.start_time);
-        }
-        if (formData.end_time) {
-          submitData.due_date = parseLocalDateTimeToISO(formData.end_time);
-        }
-      } else {
-        // Fallback to date-only for non-timed events
-        if (formData.start_date) {
-          submitData.start_date = parseDateOnlyToISO(formData.start_date);
-        }
-        if (formData.due_date) {
-          submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
+      // Handle date/time fields - only for timed objectives
+      if (formData.is_timed) {
+        if (formData.all_day) {
+          // All-day event - use date-only format with midnight times
+          if (formData.start_date) {
+            submitData.start_date = parseDateOnlyToISO(formData.start_date);
+          }
+          if (formData.due_date) {
+            submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
+          }
+        } else if (showTimeFields && (formData.start_time || formData.end_time)) {
+          // Timed event - use datetime format
+          if (formData.start_time) {
+            submitData.start_date = parseLocalDateTimeToISO(formData.start_time);
+          }
+          if (formData.end_time) {
+            submitData.due_date = parseLocalDateTimeToISO(formData.end_time);
+          }
+        } else {
+          // Fallback to date-only for timed events without specific times
+          if (formData.start_date) {
+            submitData.start_date = parseDateOnlyToISO(formData.start_date);
+          }
+          if (formData.due_date) {
+            submitData.due_date = parseDateOnlyToISO(formData.due_date, true);
+          }
         }
       }
+      // For non-timed objectives, we explicitly don't send any date/time data
       
       // Add task-specific fields if it's a task
       if (formData.objective_type === ObjectiveType.TASK && formData.location) {
@@ -506,10 +554,10 @@ export function ObjectiveForm({
         </Select>
       </div>
 
-      {/* Parent */}
-      {objectives.length > 0 && (
+      {/* Parent Objective */}
+      {formData.objective_type !== ObjectiveType.MAIN_OBJECTIVE && (
         <div>
-          <Label>Parent Objective</Label>
+          <Label htmlFor="parent">Parent Objective</Label>
           <Select
             value={formData.parent_id || "none"}
             onValueChange={(value) => 
@@ -517,10 +565,10 @@ export function ObjectiveForm({
             }
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Select a parent objective (optional)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No Parent</SelectItem>
+              <SelectItem value="none">No parent</SelectItem>
               {objectives.map((obj) => (
                 <SelectItem key={obj.id} value={obj.id}>
                   {obj.title}
@@ -531,69 +579,117 @@ export function ObjectiveForm({
         </div>
       )}
 
-      {/* All-Day Toggle */}
-      <div className="flex items-center space-x-2">
-        <Switch
-          id="all-day"
-          checked={formData.all_day}
-          onCheckedChange={handleAllDayToggle}
-        />
-        <Label htmlFor="all-day">All-day event</Label>
+      {/* Calendar Selection */}
+      <div>
+        <Label htmlFor="calendar">Calendar</Label>
+        <Select
+          value={formData.calendar_id || "none"}
+          onValueChange={(value) => 
+            setFormData({ ...formData, calendar_id: value === "none" ? null : value })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a calendar (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No calendar</SelectItem>
+            {calendars.map((calendar) => (
+              <SelectItem key={calendar.id} value={calendar.id}>
+                <div className="flex items-center space-x-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: calendar.color }}
+                  />
+                  <span>{calendar.name}</span>
+                  {calendar.is_default && (
+                    <span className="text-xs text-muted-foreground">(Default)</span>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Date/Time Fields */}
-      {showDateTimeFields && !formData.all_day ? (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Start Time *
-            </Label>
-            <Input
-              type="datetime-local"
-              value={formData.start_time}
-              onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <Label className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              End Time *
-            </Label>
-            <Input
-              type="datetime-local"
-              value={formData.end_time}
-              onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-              required
-            />
-          </div>
+      {/* Time-bound Toggle */}
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="is-timed"
+          checked={formData.is_timed}
+          onCheckedChange={(checked) => setFormData({ ...formData, is_timed: checked })}
+        />
+        <Label htmlFor="is-timed">Time-bound objective</Label>
+      </div>
+
+      {/* All-Day Toggle */}
+      {formData.is_timed && (
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="all-day"
+            checked={formData.all_day}
+            onCheckedChange={handleAllDayToggle}
+          />
+          <Label htmlFor="all-day">All-day event</Label>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4" />
-              Start Date
-            </Label>
-            <Input
-              type="date"
-              value={formData.start_date}
-              onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label className="flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4" />
-              Due Date
-            </Label>
-            <Input
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-            />
-          </div>
-        </div>
+      )}
+
+      {/* Date/Time Fields - Only show for timed objectives */}
+      {formData.is_timed && (
+        <>
+          {showDateTimeFields && !formData.all_day ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Start Time *
+                </Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.start_time}
+                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  End Time *
+                </Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.end_time}
+                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4" />
+                  Start Date
+                </Label>
+                <Input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4" />
+                  Due Date
+                </Label>
+                <Input
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Location (Tasks only) */}

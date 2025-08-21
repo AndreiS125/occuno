@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { BaseModal } from "@/components/modals/base-modal";
 import { ObjectiveForm } from "@/components/forms/objective-form";
-import { Objective, Task } from "@/types";
+import { Objective, Task, ObjectiveStatus } from "@/types";
 import { objectivesApi } from "@/lib/api";
 import { formatDateTimeLocal, formatDateOnly } from "@/lib/date-utils";
 import toast from "react-hot-toast";
@@ -38,9 +38,18 @@ export function ObjectiveModal({
   const handleSubmit = useCallback(async (data: any) => {
     try {
       if (isEdit) {
-        // Update existing objective
-        await objectivesApi.update(initialData.id!, data);
-        toast.success("Objective updated successfully! ✅");
+        // If saving as completed, use the gamified complete endpoint when transitioning
+        const isCompleting = (data.status === ObjectiveStatus.COMPLETED) || (data.completion_percentage >= 100);
+        const wasCompleted = (initialData?.status === ObjectiveStatus.COMPLETED);
+
+        if (isCompleting && !wasCompleted) {
+          const result = await objectivesApi.complete(initialData!.id as string);
+          const xp = result?.gamification?.total_xp_earned ?? result?.gamification?.xp_earned ?? 0;
+          toast.success(xp > 0 ? `Objective completed! +${xp} XP 🎉` : "Objective completed! ✅");
+        } else {
+          await objectivesApi.update(initialData!.id as string, data);
+          toast.success("Objective updated successfully! ✅");
+        }
       } else {
         // Create new objective
         if (data.objective_type === "task" && showTimeFields) {
@@ -50,7 +59,7 @@ export function ObjectiveModal({
         }
         toast.success("Objective created successfully! 🎉");
       }
-      
+
       onSuccess?.();
       onClose();
     } catch (error) {

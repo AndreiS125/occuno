@@ -56,9 +56,9 @@ module.exports = {
         '3xl': '1.5rem',
       },
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
-        display: ["SF Pro Display", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        mono: ["SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "monospace"],
+        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        display: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        mono: ["JetBrains Mono", "SF Mono", "Monaco", "Consolas", "monospace"],
       },
       fontSize: {
         'xs': ['0.75rem', { lineHeight: '1rem' }],

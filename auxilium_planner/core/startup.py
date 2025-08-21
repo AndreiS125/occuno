@@ -1,59 +1,53 @@
 """
 Startup initialization for auxilium_planner
 
-This module handles database initialization for both SQLite and SQLAlchemy
-systems, allowing for graceful migration and testing.
+This module initializes the single, unified SQLAlchemy/SQLModel database.
+Legacy SQLite initialization has been removed to prevent dual-DB usage.
 """
 
 import os
 import asyncio
 from pathlib import Path
 
-from core.database import initialize_database as init_sqlite_db
-from core.sqlalchemy_database import initialize_sqlalchemy_database
+from .sqlalchemy_database import initialize_sqlalchemy_database
+from .sqlalchemy_database import DATABASE_PATH as SQLALCHEMY_DB_PATH
 from core.logging_config import get_logger
 
 logger = get_logger("startup")
 
 async def initialize_databases():
-    """Initialize both SQLite and SQLAlchemy databases"""
-    logger.info("🚀 Initializing databases...")
-    
+    """Initialize the SQLAlchemy database only (single source of truth)."""
+    logger.info("🚀 Initializing database...")
+
     try:
-        # Always initialize the original SQLite database
-        await init_sqlite_db()
-        logger.info("✅ SQLite database initialized")
-        
         # Initialize SQLAlchemy database
         initialize_sqlalchemy_database()
-        logger.info("✅ SQLAlchemy database initialized")
-        
-        # Check if migration is needed
-        use_sqlalchemy = os.getenv('AUXILIUM_USE_SQLALCHEMY', 'false').lower() in ('true', '1', 'yes')
-        if use_sqlalchemy:
-            logger.info("🔄 Using SQLAlchemy repositories")
-        else:
-            logger.info("🗄️ Using SQLite repositories")
-        
+        logger.info(f"✅ SQLAlchemy database initialized at {SQLALCHEMY_DB_PATH}")
+        logger.info("🔄 Using SQLAlchemy repositories")
         logger.info("✅ Database initialization completed successfully")
-        
+
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
         raise
 
 def get_database_status():
-    """Get status of both database systems"""
-    sqlite_db_path = Path("data/auxilium_planner.db")
-    sqlalchemy_db_path = Path("data/auxilium_planner_sqlalchemy.db")
-    
+    """Report status of databases (SQLAlchemy is authoritative).
+
+    Returns presence/size of the deprecated legacy SQLite file only to assist
+    with cleanup. The application always uses the SQLAlchemy database.
+    """
+    legacy_sqlite_path = Path("data/auxilium_planner.db")
+    sqlalchemy_db_path = SQLALCHEMY_DB_PATH
+
     status = {
-        "sqlite_exists": sqlite_db_path.exists(),
+        "sqlite_exists": legacy_sqlite_path.exists(),
         "sqlalchemy_exists": sqlalchemy_db_path.exists(),
-        "use_sqlalchemy": os.getenv('AUXILIUM_USE_SQLALCHEMY', 'false').lower() in ('true', '1', 'yes'),
-        "sqlite_size": sqlite_db_path.stat().st_size if sqlite_db_path.exists() else 0,
-        "sqlalchemy_size": sqlalchemy_db_path.stat().st_size if sqlalchemy_db_path.exists() else 0
+        "use_sqlalchemy": True,
+        "sqlite_size": legacy_sqlite_path.stat().st_size if legacy_sqlite_path.exists() else 0,
+        "sqlalchemy_size": sqlalchemy_db_path.stat().st_size if sqlalchemy_db_path.exists() else 0,
+        "sqlalchemy_path": str(sqlalchemy_db_path),
     }
-    
+
     return status
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useRef } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { expandRecurringEvent } from "@/lib/date-utils";
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -12,9 +12,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
   AlertCircle,
+  Calendar as CalendarIcon,
+  Plus,
+  Eye,
+  EyeOff,
+  Edit,
+  Trash2,
+  Settings,
+  ChevronDown,
+  Check
 } from "lucide-react";
-import { ObjectiveModal } from "@/components/modals";
-import { Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel } from "@/types";
+import { ObjectiveModal, CalendarManagementModal } from "@/components/modals";
+
+import { Objective, Task, ObjectiveType, ObjectiveStatus, EnergyLevel, Calendar } from "@/types";
+import { useCalendars } from "@/hooks/use-calendars";
+import { MiniCalendar } from "./mini-calendar";
 import "@/styles/fullcalendar.css";
 
 interface CalendarEvent {
@@ -53,10 +65,32 @@ export function FullCalendarModern({
   onRefresh,
 }: FullCalendarModernProps) {
   const [showModal, setShowModal] = useState(false);
+  const [showPopover, setShowPopover] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
+  const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [showAllDay, setShowAllDay] = useState(true);
+  const [showCalendarSidebar, setShowCalendarSidebar] = useState(true);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<Set<string>>(new Set());
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [editingCalendar, setEditingCalendar] = useState<Calendar | null>(null);
+  const [calendarModalMode, setCalendarModalMode] = useState<'create' | 'edit'>('create');
   const calendarRef = useRef<FullCalendar>(null);
+  const calendarContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Calendar management
+  const {
+    calendars,
+    loading: calendarsLoading,
+    fetchCalendars,
+    createCalendar,
+    updateCalendar,
+    deleteCalendar,
+    toggleCalendarVisibility,
+    setDefaultCalendar,
+    ensureDefaultCalendar
+  } = useCalendars();
 
   // Convert objectives to FullCalendar events
   const events = useMemo<CalendarEvent[]>(() => {
@@ -84,8 +118,22 @@ export function FullCalendarModern({
           start_date: !!obj.start_date,
           due_date: !!obj.due_date
         });
+        return false;
       }
-      return hasRequiredDates;
+      
+      // Apply calendar filtering if specific calendars are selected
+      if (selectedCalendarIds.size > 0) {
+        const isInSelectedCalendar = obj.calendar_id && selectedCalendarIds.has(obj.calendar_id);
+        if (!isInSelectedCalendar) {
+          console.log("📅 Objective filtered out (calendar not selected):", obj.title, {
+            calendar_id: obj.calendar_id,
+            selectedCalendars: Array.from(selectedCalendarIds)
+          });
+          return false;
+        }
+      }
+      
+      return true;
     });
     
     console.log("📋 Filtered objectives:", filteredObjectives.length, "passed filter");
@@ -119,21 +167,29 @@ export function FullCalendarModern({
       // Let events display their actual duration - no artificial minimum
       // FullCalendar will handle minimum visual height via eventMinHeight setting
 
-      // Color based on status
+      // Color based on calendar first, then status
       let backgroundColor = "#60a5fa"; // Default blue
-      switch (obj.status) {
-        case ObjectiveStatus.COMPLETED:
-          backgroundColor = "#4ade80"; // Green
-          break;
-        case ObjectiveStatus.IN_PROGRESS:
-          backgroundColor = "#fbbf24"; // Amber
-          break;
-        case ObjectiveStatus.BLOCKED:
-          backgroundColor = "#f87171"; // Red
-          break;
-        case ObjectiveStatus.CANCELLED:
-          backgroundColor = "#9ca3af"; // Gray
-          break;
+      
+      // Use calendar color if available
+      const calendar = calendars.find(cal => cal.id === obj.calendar_id);
+      if (calendar?.color) {
+        backgroundColor = calendar.color;
+      } else {
+        // Fallback to status-based coloring
+        switch (obj.status) {
+          case ObjectiveStatus.COMPLETED:
+            backgroundColor = "#4ade80"; // Green
+            break;
+          case ObjectiveStatus.IN_PROGRESS:
+            backgroundColor = "#fbbf24"; // Amber
+            break;
+          case ObjectiveStatus.BLOCKED:
+            backgroundColor = "#f87171"; // Red
+            break;
+          case ObjectiveStatus.CANCELLED:
+            backgroundColor = "#9ca3af"; // Gray
+            break;
+        }
       }
 
       const event: CalendarEvent = {
@@ -170,7 +226,164 @@ export function FullCalendarModern({
     });
 
     return calendarEvents;
-  }, [objectives]);
+  }, [objectives, selectedCalendarIds, calendars]);
+
+  // Initialize calendars and set all visible calendars as selected by default
+  const initializeCalendars = useCallback(async () => {
+    await fetchCalendars();
+    // Set all visible calendars as selected by default
+    if (calendars.length > 0) {
+      const visibleCalendarIds = calendars.filter(cal => cal.is_visible).map(cal => cal.id);
+      setSelectedCalendarIds(new Set(visibleCalendarIds));
+    }
+  }, [fetchCalendars, calendars]);
+
+  // Initialize calendars on mount
+  useEffect(() => {
+    initializeCalendars();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ensure FullCalendar recalculates its size when the sidebar toggles
+  useEffect(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    // Immediate update and one after the transition ends
+    try {
+      api.updateSize();
+    } catch {}
+    const t = setTimeout(() => {
+      try { api.updateSize(); } catch {}
+      try { window.dispatchEvent(new Event('resize')); } catch {}
+    }, 320); // matches transition duration-300
+    return () => clearTimeout(t);
+  }, [showCalendarSidebar]);
+
+  // Observe container width changes to force FullCalendar to stretch/shrink
+  useEffect(() => {
+    const el = calendarContainerRef.current;
+    const api = calendarRef.current?.getApi();
+    if (!el || !api) return;
+    let raf = 0;
+    let last = el.getBoundingClientRect().width;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width;
+      if (Math.abs(w - last) > 0.5) {
+        last = w;
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          try { api.updateSize(); } catch {}
+        });
+      }
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Close popover on outside click or Escape
+  useEffect(() => {
+    if (!showPopover) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      const pop = popoverRef.current;
+      const anchor = popoverAnchor;
+      const target = e.target as Node;
+      if (pop && pop.contains(target)) return;
+      if (anchor && anchor.contains(target as Node)) return;
+      setShowPopover(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowPopover(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [showPopover, popoverAnchor]);
+
+  // Calendar management functions
+  const handleSaveCalendar = useCallback(async (calendarData: Partial<Calendar>) => {
+    if (calendarModalMode === 'create') {
+      // Convert to CalendarCreateData format
+      const createData = {
+        name: calendarData.name!,
+        description: calendarData.description,
+        color: calendarData.color || "#3b82f6",
+        is_visible: calendarData.is_visible ?? true,
+        is_default: calendarData.is_default ?? false
+      };
+      const newCalendar = await createCalendar(createData);
+      if (newCalendar) {
+        // Add to selected calendars by default
+        setSelectedCalendarIds(prev => new Set([...Array.from(prev), newCalendar.id]));
+      }
+    } else {
+      // Update existing calendar
+      const updateData = {
+        name: calendarData.name,
+        description: calendarData.description,
+        color: calendarData.color,
+        is_visible: calendarData.is_visible,
+        is_default: calendarData.is_default
+      };
+      await updateCalendar(calendarData.id!, updateData);
+    }
+  }, [calendarModalMode, createCalendar, updateCalendar]);
+
+  const handleDeleteCalendar = useCallback(async (calendarId: string) => {
+    const success = await deleteCalendar(calendarId);
+    if (success) {
+      // Remove from selected calendars
+      setSelectedCalendarIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(calendarId);
+        return newSet;
+      });
+    }
+  }, [deleteCalendar]);
+
+  const openCreateCalendarModal = useCallback(() => {
+    setEditingCalendar(null);
+    setCalendarModalMode('create');
+    setShowCalendarModal(true);
+  }, []);
+
+  const openEditCalendarModal = useCallback((calendar: Calendar) => {
+    setEditingCalendar(calendar);
+    setCalendarModalMode('edit');
+    setShowCalendarModal(true);
+  }, []);
+
+  const handleToggleCalendarVisibility = useCallback(async (calendarId: string) => {
+    const success = await toggleCalendarVisibility(calendarId);
+    if (success) {
+      // Remove from selected if hidden
+      const calendar = calendars.find(c => c.id === calendarId);
+      if (calendar && !calendar.is_visible) {
+        setSelectedCalendarIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(calendarId);
+          return newSet;
+        });
+      }
+    }
+  }, [toggleCalendarVisibility, calendars]);
+
+  const handleToggleCalendarSelection = useCallback((calendarId: string) => {
+    setSelectedCalendarIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(calendarId)) {
+        newSet.delete(calendarId);
+      } else {
+        newSet.add(calendarId);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Handle date selection (clicking on empty calendar space)
   const handleDateSelect = useCallback((selectInfo: any) => {
@@ -189,22 +402,22 @@ export function FullCalendarModern({
     setShowModal(true);
   }, []);
 
-  // Handle event click
+  // Handle event click (existing objective) - Show popover instead of modal
   const handleEventClick = useCallback((clickInfo: any) => {
+    console.log("📅 Event clicked:", clickInfo.event.title);
     const event = clickInfo.event;
     
-    // Create a safe copy of extendedProps to avoid readonly issues
-    const extendedPropsCopy = {
-      objective: event.extendedProps.objective,
-      objectiveType: event.extendedProps.objectiveType,
-      status: event.extendedProps.status,
-      energyLevel: event.extendedProps.energyLevel,
-      priorityScore: event.extendedProps.priorityScore,
-      complexityScore: event.extendedProps.complexityScore,
-      completionPercentage: event.extendedProps.completionPercentage,
-    };
+    // Find the matching objective
+    const objective = event.extendedProps?.objective;
+    if (!objective) {
+      console.error("❌ No objective found in event extended props");
+      return;
+    }
     
-    const calendarEvent: CalendarEvent = {
+    console.log("🎯 Found objective for popover:", objective);
+    
+    // Set the selected event for the popover
+    setSelectedEvent({
       id: event.id,
       title: event.title,
       start: event.start,
@@ -213,22 +426,13 @@ export function FullCalendarModern({
       backgroundColor: event.backgroundColor,
       borderColor: event.borderColor,
       textColor: event.textColor,
-      extendedProps: extendedPropsCopy,
-    };
-
-    // If this is a recurring instance, find the original event
-    const resource = event.extendedProps.objective;
-    if (resource.recurring_instance && resource.original_id) {
-      const originalEvent = objectives.find(obj => obj.id === resource.original_id);
-      if (originalEvent) {
-        calendarEvent.extendedProps.objective = originalEvent;
-      }
-    }
-
-    setSelectedEvent(calendarEvent);
-    setSelectedSlot(null);
-    setShowModal(true);
-  }, [objectives]);
+      extendedProps: event.extendedProps
+    });
+    
+    // Set anchor element for popover positioning
+    setPopoverAnchor(clickInfo.el);
+    setShowPopover(true);
+  }, []);
 
   // Handle event drop (drag and drop)
   const handleEventDrop = useCallback(async (dropInfo: any) => {
@@ -288,9 +492,19 @@ export function FullCalendarModern({
             newEvent.due_date = utcEnd.toISOString().split('T')[0] + 'T00:00:00.000Z';
             newEvent.all_day = true;  // Explicit all-day flag
           } else {
-            // Timed event
-            newEvent.start_date = startDate.toISOString();
-            newEvent.due_date = endDate.toISOString();
+            // Timed event - preserve local time without timezone conversion
+            const formatLocalDateTime = (date: Date) => {
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              const hours = String(date.getHours()).padStart(2, '0');
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              const seconds = String(date.getSeconds()).padStart(2, '0');
+              return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
+            };
+            
+            newEvent.start_date = formatLocalDateTime(startDate);
+            newEvent.due_date = formatLocalDateTime(endDate);
             newEvent.all_day = false;  // Explicit timed flag
           }
           
@@ -337,9 +551,19 @@ export function FullCalendarModern({
           });
           
         } else {
-          // Timed event - update date fields with time
-          updates.start_date = startDate.toISOString();
-          updates.due_date = endDate.toISOString();
+          // Timed event - preserve local time without timezone conversion
+          const formatLocalDateTime = (date: Date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
+          };
+          
+          updates.start_date = formatLocalDateTime(startDate);
+          updates.due_date = formatLocalDateTime(endDate);
           updates.all_day = false;  // Explicit timed flag
         }
         
@@ -420,9 +644,19 @@ export function FullCalendarModern({
         });
         
       } else {
-        // Timed event resize
-        updates.start_date = startDate.toISOString();
-        updates.due_date = endDate.toISOString();
+        // Timed event resize - preserve local time without timezone conversion
+        const formatLocalDateTime = (date: Date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
+        };
+        
+        updates.start_date = formatLocalDateTime(startDate);
+        updates.due_date = formatLocalDateTime(endDate);
         updates.all_day = false;  // Explicit timed flag
       }
       
@@ -440,9 +674,148 @@ export function FullCalendarModern({
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="h-full bg-card rounded-xl border overflow-hidden relative flex flex-col"
+      className="h-full bg-card rounded-xl border overflow-hidden relative flex w-full"
     >
-      <FullCalendar
+      {/* Calendar Sidebar */}
+      <AnimatePresence>
+        {showCalendarSidebar && (
+          <motion.div
+            initial={{ x: -300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -300, opacity: 0 }}
+            className="w-80 bg-card border-r flex flex-col"
+            onAnimationStart={() => {
+              const api = calendarRef.current?.getApi();
+              if (!api) return;
+              try { api.updateSize(); } catch {}
+            }}
+            onAnimationComplete={() => {
+              const api = calendarRef.current?.getApi();
+              if (!api) return;
+              try { api.updateSize(); } catch {}
+              try { window.dispatchEvent(new Event('resize')); } catch {}
+            }}
+          >
+            {/* Sidebar Header */}
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-lg">My Calendars</h3>
+                <button
+                  onClick={() => setShowCalendarSidebar(false)}
+                  className="p-1 hover:bg-muted rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Mini Calendar */}
+            <div className="p-4 border-b">
+              <MiniCalendar
+                selectedDate={new Date()}
+                onDateClick={(date) => {
+                  // Navigate main calendar to the selected date, preserving current view
+                  const calendar = calendarRef.current;
+                  if (calendar) {
+                    calendar.getApi().gotoDate(date);
+                    // Don't change view - just navigate to the date
+                  }
+                }}
+                highlightedDates={objectives
+                  .filter(obj => obj.start_date)
+                  .map(obj => new Date(obj.start_date!))
+                }
+              />
+            </div>
+
+            {/* Calendars List */}
+            <div className="flex-1 p-4 overflow-y-auto">
+              {calendarsLoading ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Loading calendars...
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {calendars.map((calendar) => (
+                    <div
+                      key={calendar.id}
+                      className="flex items-center justify-between p-2 rounded hover:bg-muted/50"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedCalendarIds.has(calendar.id)}
+                          onChange={() => handleToggleCalendarSelection(calendar.id)}
+                          className="rounded"
+                        />
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: calendar.color }}
+                        />
+                        <span className="text-sm font-medium">{calendar.name}</span>
+                        {calendar.is_default && (
+                          <span className="text-xs text-muted-foreground">(Default)</span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleToggleCalendarVisibility(calendar.id)}
+                          className="p-1 hover:bg-muted rounded"
+                          title={calendar.is_visible ? "Hide calendar" : "Show calendar"}
+                        >
+                          {calendar.is_visible ? (
+                            <Eye className="w-3 h-3" />
+                          ) : (
+                            <EyeOff className="w-3 h-3 text-muted-foreground" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => openEditCalendarModal(calendar)}
+                          className="p-1 hover:bg-muted rounded"
+                          title="Edit calendar"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => openEditCalendarModal(calendar)}
+                          className="p-1 hover:bg-muted rounded text-destructive"
+                          title="Delete calendar"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Calendar Button */}
+              <button
+                onClick={openCreateCalendarModal}
+                className="w-full mt-4 p-2 border-2 border-dashed border-muted-foreground/30 rounded-lg hover:border-primary/50 hover:bg-muted/30 transition-colors text-sm text-muted-foreground hover:text-foreground flex items-center justify-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Calendar</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Left edge tab to open Calendars when sidebar is hidden */}
+      {!showCalendarSidebar && (
+        <button
+          onClick={() => setShowCalendarSidebar(true)}
+          aria-label="Show calendars"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-primary text-primary-foreground rounded-r-md shadow px-2 py-3 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          <CalendarIcon className="w-4 h-4" />
+        </button>
+      )}
+
+      {/* Main Calendar - always flex-1; sidebar presence dictates remaining width */}
+      <div ref={calendarContainerRef} className="aux-calendar-container flex-1 min-w-0 w-full flex flex-col transition-all duration-300">
+        <FullCalendar
         ref={calendarRef}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin, multiMonthPlugin]}
         headerToolbar={{
@@ -481,7 +854,9 @@ export function FullCalendarModern({
         // Time settings - Improved for better event duration rendering
         slotMinTime="00:00:00"
         slotMaxTime="24:00:00"
-        slotDuration="00:15:00"  // Smaller slots for better precision
+        // Start scrolled to 9 AM on initial load
+        scrollTime="09:00:00"
+        slotDuration="00:30:00"  // Smaller slots for better precision
         slotLabelInterval="01:00:00"
         snapDuration="00:05:00"  // Finer snapping for precise times
         // All-day settings - More compact
@@ -517,17 +892,286 @@ export function FullCalendarModern({
         } : undefined}
       />
 
+      {/* Calendar Management Modal */}
+      <CalendarManagementModal
+        isOpen={showCalendarModal}
+        onClose={() => setShowCalendarModal(false)}
+        onSave={handleSaveCalendar}
+        onDelete={handleDeleteCalendar}
+        calendar={editingCalendar}
+        mode={calendarModalMode}
+      />
 
+      {/* Full-Featured Event Popover - Complete replacement for modal */}
+      {showPopover && selectedEvent && (
+          // Popover without screen-blocking overlay
+          <div 
+            ref={popoverRef}
+            className="fixed z-50 w-[420px] bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200/60 dark:border-gray-700/60 max-h-[80vh] overflow-hidden"
+            style={{
+              left: popoverAnchor ? Math.min(popoverAnchor.getBoundingClientRect().right + 10, window.innerWidth - 400) : 100,
+              top: popoverAnchor ? Math.min(popoverAnchor.getBoundingClientRect().top, window.innerHeight - 600) : 100,
+            }}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-gray-200/60 dark:border-gray-700/60 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/40 dark:to-purple-950/40">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Edit Event</h3>
+                <button 
+                  onClick={() => setShowPopover(false)}
+                  className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
 
-      {/* Note: Custom styles are now in /src/styles/fullcalendar.css */}
+            {/* Content - Scrollable */}
+            <div className="p-4 space-y-4 max-h-96 overflow-y-auto" data-popover-form>
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Title
+                </label>
+                <input 
+                  type="text"
+                  defaultValue={selectedEvent.title}
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+                  placeholder="Event title..."
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Status
+                </label>
+                <div className="relative">
+                  <select 
+                    defaultValue={selectedEvent.extendedProps.objective.status}
+                    className="w-full appearance-none px-3 py-2 pr-9 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+                  >
+                    <option value="not_started">Not Started</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                </div>
+              </div>
+
+              {/* Priority & Energy */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Priority (0–100%)
+                  </label>
+                  <input 
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    defaultValue={selectedEvent.extendedProps.objective.priority_score}
+                    data-priority
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Energy Level
+                  </label>
+                  <div className="relative">
+                    <select 
+                      defaultValue={selectedEvent.extendedProps.objective.energy_requirement}
+                      className="w-full appearance-none px-3 py-2 pr-9 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Description
+                </label>
+                <textarea 
+                  defaultValue={selectedEvent.extendedProps.objective.description || ''}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent resize-none shadow-sm max-h-56 overflow-auto"
+                  placeholder="Add a description..."
+                  onInput={(e) => {
+                    const ta = e.currentTarget;
+                    ta.style.height = 'auto';
+                    const max = 224; // ~max-h-56 (14rem)
+                    ta.style.height = Math.min(ta.scrollHeight, max) + 'px';
+                  }}
+                />
+              </div>
+
+              {/* Progress */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Progress ({selectedEvent.extendedProps.objective.completion_percentage}%)
+                </label>
+                <div className="flex items-center space-x-3">
+                  <input 
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    defaultValue={selectedEvent.extendedProps.objective.completion_percentage}
+                    className="flex-1 accent-blue-500"
+                    data-completion
+                    onChange={(e) => {
+                      const label = e.target.previousElementSibling as HTMLLabelElement;
+                      if (label) {
+                        label.textContent = `Progress (${e.target.value}%)`;
+                      }
+                    }}
+                  />
+                  <span className="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">
+                    {selectedEvent.extendedProps.objective.completion_percentage}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Time Info - Read-only display */}
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-md p-3">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Time</div>
+                <div className="text-sm text-gray-900 dark:text-white">
+                  {new Date(selectedEvent.start).toLocaleString()} 
+                  {selectedEvent.end && ` - ${new Date(selectedEvent.end).toLocaleString()}`}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Drag event to reschedule • Resize to change duration
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-2 p-3 border-t border-gray-200/60 dark:border-gray-700/60">
+              {/* Delete (icon-only) */}
+              <button
+                type="button"
+                aria-label="Delete"
+                title="Delete"
+                className="p-2 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
+                onClick={async () => {
+                  try {
+                    await onDelete(selectedEvent.extendedProps.objective.id);
+                    setShowPopover(false);
+                    onRefresh();
+                  } catch (error) {
+                    console.error('Error deleting:', error);
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+
+              {/* Complete (icon-only) */}
+              <button
+                type="button"
+                aria-label="Complete"
+                title="Complete"
+                className="p-2 rounded-md hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 transition-colors"
+                onClick={async () => {
+                  try {
+                    await onUpdate(selectedEvent.extendedProps.objective.id, {
+                      status: ObjectiveStatus.COMPLETED,
+                      completion_percentage: 100,
+                    });
+                    setShowPopover(false);
+                    onRefresh();
+                  } catch (error) {
+                    console.error('Error completing:', error);
+                  }
+                }}
+              >
+                <Check className="w-4 h-4" />
+              </button>
+
+              {/* Open Full Editor (icon-only) */}
+              <button
+                type="button"
+                aria-label="Open Full Editor"
+                title="Open Full Editor"
+                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors"
+                onClick={() => {
+                  setShowPopover(false);
+                  setShowModal(true);
+                }}
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+
+              {/* Save (text) */}
+              <button
+                type="button"
+                className="ml-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors text-sm font-medium shadow"
+                onClick={async () => {
+                  const form = popoverRef.current?.querySelector('[data-popover-form]') as HTMLElement | null;
+                  if (!form) return;
+                  const title = (form.querySelector('input[type="text"]') as HTMLInputElement | null)?.value?.trim();
+                  const selects = form.querySelectorAll('select') as NodeListOf<HTMLSelectElement>;
+                  const status = selects[0]?.value as ObjectiveStatus;
+                  const energy = selects[1]?.value as EnergyLevel;
+                  const priorityStr = (form.querySelector('[data-priority]') as HTMLInputElement | null)?.value;
+                  const priority = priorityStr ? parseFloat(priorityStr) : undefined;
+                  const description = (form.querySelector('textarea') as HTMLTextAreaElement | null)?.value ?? '';
+                  const completionStr = (form.querySelector('[data-completion]') as HTMLInputElement | null)?.value;
+                  const completion = completionStr ? parseInt(completionStr) : undefined;
+
+                  const updates: Partial<Objective> = {
+                    title: title ?? selectedEvent.extendedProps.objective.title,
+                    status,
+                    priority_score: priority,
+                    energy_requirement: energy,
+                    description,
+                    completion_percentage: completion,
+                  };
+
+                  try {
+                    await onUpdate(selectedEvent.extendedProps.objective.id, updates);
+                    setShowPopover(false);
+                    onRefresh();
+                  } catch (error) {
+                    console.error('Error updating:', error);
+                  }
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
+
+{/* Note: Custom styles are now in /src/styles/fullcalendar.css */}
       
-      {/* Toggle All-Day Section Button */}
-      <button 
-        onClick={() => setShowAllDay(!showAllDay)}
-        className="fixed bottom-4 right-4 z-10 px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-lg hover:bg-primary/90 transition-colors"
-      >
-        {showAllDay ? 'Hide All-Day Section' : 'Show All-Day Section'}
-      </button>
-    </motion.div>
-  );
+{/* Calendar Management Buttons */}
+<div className="fixed bottom-4 right-4 z-10 flex flex-col space-y-2">
+  <button 
+    onClick={() => setShowCalendarSidebar(!showCalendarSidebar)}
+    className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-lg hover:bg-primary/90 transition-colors flex items-center space-x-2"
+  >
+    <CalendarIcon className="w-4 h-4" />
+    <span>{showCalendarSidebar ? 'Hide Calendars' : 'Show Calendars'}</span>
+  </button>
+  
+  <button 
+    onClick={() => setShowAllDay(!showAllDay)}
+    className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md shadow-lg hover:bg-secondary/90 transition-colors"
+  >
+    {showAllDay ? 'Hide All-Day Section' : 'Show All-Day Section'}
+  </button>
+</div>
+</div>
+</motion.div>
+);
 } 

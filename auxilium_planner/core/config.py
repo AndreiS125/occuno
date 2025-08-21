@@ -102,6 +102,10 @@ class Settings(BaseSettings):
 # Initialize settings
 settings = Settings()
 
+def get_settings() -> Settings:
+    """Return the singleton settings instance (backward-compatible accessor)."""
+    return settings
+
 # Add the user's API keys for quota management
 user_api_keys = [
     "AIzaSyDYBKFLbGpvan_B0EGNIYaN8dx3u-FiuJM",

@@ -6,181 +6,47 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 from core.config import settings
-from domain.models import (
-    UserProfile, ObjectiveStatus, CouponType, CouponDefinition, 
-    EarnedCoupon, MysteryBoxReward, AchievementDefinition,
-    ObjectiveType, UserAchievement
+from core.models import (
+    UserProfile, EarnedCoupon, MysteryBoxReward, UserAchievementDefinition,
+    UserAchievement, UserCouponDefinition
 )
-from repositories.repository_factory import get_user_profile_repository
-from repositories import ObjectiveRepository
+from repositories.repository_factory import get_user_profile_repository, get_objective_repository
+from core.logging_config import get_logger
 
 class GamificationService:
     """Service for managing coupon-based gamification system with real-world rewards."""
     
-    def __init__(self, objective_repo = None, user_repo = None):
-        self.user_repo = user_repo or get_user_profile_repository()
-        self.objective_repo = objective_repo or ObjectiveRepository()
-        self._achievement_definitions = self._load_achievement_definitions()
-        self._coupon_definitions = self._load_coupon_definitions()
+    def __init__(self):
+        self.logger = get_logger("gamification_service")
+        self.user_repo = get_user_profile_repository()
+        self.objective_repo = get_objective_repository()
     
-    def _load_coupon_definitions(self) -> List[CouponDefinition]:
-        """Load all available coupon types with their properties."""
-        return [
-            CouponDefinition(
-                coupon_type=CouponType.SCROLL_INSTAGRAM,
-                display_name="📱 Scroll Instagram",
-                description="30 minutes of mindless scrolling",
-                duration_minutes=30,
-                rarity="common"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.PLAY_GAMES,
-                display_name="🎮 Play Games",
-                description="45 minutes of gaming time",
-                duration_minutes=45,
-                rarity="rare"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.WATCH_YOUTUBE,
-                display_name="📺 Watch YouTube",
-                description="30 minutes of YouTube videos",
-                duration_minutes=30,
-                rarity="common"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.TAKE_NAP,
-                display_name="😴 Take Nap",
-                description="30 minute power nap",
-                duration_minutes=30,
-                rarity="uncommon"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.EAT_SNACK,
-                display_name="🍿 Eat Snack",
-                description="Guilt-free snack time",
-                duration_minutes=15,
-                rarity="common"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.WATCH_NETFLIX,
-                display_name="📺 Watch Netflix",
-                description="60 minutes of Netflix binge",
-                duration_minutes=60,
-                rarity="rare"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.BROWSE_REDDIT,
-                display_name="🔍 Browse Reddit",
-                description="30 minutes of Reddit browsing",
-                duration_minutes=30,
-                rarity="common"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.LISTEN_MUSIC,
-                display_name="🎵 Listen Music",
-                description="30 minutes of music time",
-                duration_minutes=30,
-                rarity="common"
-            ),
-            CouponDefinition(
-                coupon_type=CouponType.CHAT_FRIENDS,
-                display_name="💬 Chat Friends",
-                description="45 minutes of social time",
-                duration_minutes=45,
-                rarity="uncommon"
-            )
-        ]
+
     
-    def _load_achievement_definitions(self) -> List[AchievementDefinition]:
-        """Load achievement definitions updated for coupon system."""
-        return [
-            # Common Achievements
-            AchievementDefinition(
-                id="first_steps",
-                name="🌟 First Steps",
-                description="Your journey begins! Complete your first task",
-                criteria_code="completed_tasks >= 1",
-                points_value=50
-            ),
-            AchievementDefinition(
-                id="coupon_collector",
-                name="🎫 Coupon Collector", 
-                description="Earn your first 5 coupons",
-                criteria_code="total_coupons_earned >= 5",
-                points_value=75
-            ),
-            AchievementDefinition(
-                id="daily_hero",
-                name="🦸 Daily Hero",
-                description="Complete 3 tasks in a single day",
-                criteria_code="daily_tasks_today >= 3",
-                points_value=100
-            ),
-            
-            # Rare Achievements
-            AchievementDefinition(
-                id="streak_master",
-                name="🔥 Streak Master",
-                description="Maintain a 7-day streak (Rare)",
-                criteria_code="current_streak >= 7",
-                points_value=300
-            ),
-            AchievementDefinition(
-                id="task_crusher",
-                name="💪 Task Crusher", 
-                description="Complete 25 tasks (Rare)",
-                criteria_code="completed_tasks >= 25",
-                points_value=500
-            ),
-            AchievementDefinition(
-                id="coupon_master",
-                name="🎭 Coupon Master",
-                description="Earn 50 coupons (Rare)",
-                criteria_code="total_coupons_earned >= 50",
-                points_value=400
-            ),
-            
-            # Epic Achievements
-            AchievementDefinition(
-                id="mystery_box_legend",
-                name="📦 Mystery Box Legend",
-                description="Open 20 mystery boxes (Epic)",
-                criteria_code="mystery_boxes_opened >= 20",
-                points_value=1000
-            ),
-            AchievementDefinition(
-                id="streak_legend",
-                name="🌟 Streak Legend",
-                description="Maintain a 30-day streak (Epic)",
-                criteria_code="current_streak >= 30",
-                points_value=2000
-            ),
-            AchievementDefinition(
-                id="indulgence_master",
-                name="🏆 Indulgence Master",
-                description="Use 100 coupons (Epic)",
-                criteria_code="total_coupons_used >= 100",
-                points_value=1500
-            ),
-            
-            # Limited-Time Achievements
-            AchievementDefinition(
-                id="weekend_warrior",
-                name="⚔️ Weekend Warrior",
-                description="Complete 5 tasks during weekend (Limited Time!)",
-                criteria_code="weekend_tasks >= 5",
-                points_value=250
-            ),
-            AchievementDefinition(
-                id="midnight_grinder",
-                name="🌙 Midnight Grinder",
-                description="Complete a task after 11 PM (Limited Time!)",
-                criteria_code="late_night_tasks >= 1",
-                points_value=150
-            )
-        ]
+    def _get_user_coupon_definitions(self, user_profile: UserProfile) -> List[UserCouponDefinition]:
+        """Get active coupon definitions for a specific user"""
+        if not user_profile:
+            return []
+        defs = user_profile.coupon_definitions or []
+        if not defs:
+            # Ensure defaults in DB and refresh
+            ensured = self.user_repo.ensure_coupon_definitions(user_profile.id)
+            defs = ensured or []
+        return [coupon_def for coupon_def in defs if coupon_def.is_active]
     
-    def _create_coupon_with_expiration(self, coupon_type: CouponType, bonus_multiplier: float = 1.0, display_name: Optional[str] = None) -> EarnedCoupon:
+    def _get_user_achievement_definitions(self, user_profile: UserProfile) -> List[UserAchievementDefinition]:
+        """Get active achievement definitions for a specific user"""
+        if not user_profile:
+            return []
+        defs = user_profile.achievement_definitions or []
+        if not defs:
+            ensured = self.user_repo.ensure_achievement_definitions(user_profile.id)
+            defs = ensured or []
+        return [achievement_def for achievement_def in defs if achievement_def.is_active]
+    
+
+    
+    def _create_coupon_with_expiration(self, coupon_type: str, user_profile: UserProfile, bonus_multiplier: float = 1.0, display_name: Optional[str] = None) -> EarnedCoupon:
         """Create a coupon with reasonable expiration time and optional custom display name."""
         now = datetime.utcnow()
         
@@ -196,15 +62,21 @@ class GamificationService:
             next_day = now + timedelta(days=1)
             end_of_day = next_day.replace(hour=23, minute=59, second=59, microsecond=999999)
         
+        # Find the coupon definition to get duration info
+        coupon_definitions = self._get_user_coupon_definitions(user_profile)
+        coupon_def = next((c for c in coupon_definitions if c.coupon_type == coupon_type), None)
+        duration_str = f"{coupon_def.duration_minutes} minutes" if coupon_def else "15 minutes"
+        
         return EarnedCoupon(
             coupon_type=coupon_type,
+            coupon_value=duration_str,  # Set the required coupon_value field
             display_name=display_name,
             earned_at=now,
-            expires_at=end_of_day,
+            expiration_date=end_of_day,  # Use expiration_date instead of expires_at
             is_used=False
         )
     
-    def _get_random_coupon_type(self, rarity_boost: float = 1.0) -> CouponType:
+    def _get_random_coupon_type(self, user_profile: UserProfile, rarity_boost: float = 1.0) -> str:
         """Get a random coupon type based on rarity weights."""
         # Define rarity weights (higher = more common)
         weights = {
@@ -223,26 +95,27 @@ class GamificationService:
         
         # Create weighted list
         weighted_coupons = []
-        for coupon_def in self._coupon_definitions:
+        coupon_definitions = self._get_user_coupon_definitions(user_profile)
+        for coupon_def in coupon_definitions:
             weight = weights.get(coupon_def.rarity, 1)
             weighted_coupons.extend([coupon_def.coupon_type] * weight)
         
         return random.choice(weighted_coupons)
     
-    def _map_to_backend_coupon_type(self, frontend_coupon_type: str) -> CouponType:
+    def _map_to_backend_coupon_type(self, frontend_coupon_type: str) -> str:
         """Map frontend coupon types to existing backend CouponType enum values."""
         # Direct mappings for frontend types that match backend types
         direct_mappings = {
-            "watch_youtube": CouponType.WATCH_YOUTUBE,
-            "scroll_instagram": CouponType.SCROLL_INSTAGRAM,
-            "play_games": CouponType.PLAY_GAMES,
-            "take_nap": CouponType.TAKE_NAP,
-            "power_nap": CouponType.TAKE_NAP,
-            "eat_snack": CouponType.EAT_SNACK,
-            "snack_break": CouponType.EAT_SNACK,
-            "browse_reddit": CouponType.BROWSE_REDDIT,
-            "listen_music": CouponType.LISTEN_MUSIC,
-            "chat_friends": CouponType.CHAT_FRIENDS,
+            "watch_youtube": "watch_youtube",
+            "scroll_instagram": "scroll_instagram",
+            "play_games": "play_games",
+            "take_nap": "take_nap",
+            "power_nap": "take_nap",
+            "eat_snack": "eat_snack",
+            "snack_break": "eat_snack",
+            "browse_reddit": "browse_reddit",
+            "listen_music": "listen_music",
+            "chat_friends": "chat_friends",
         }
         
         # Check for direct mapping first
@@ -252,32 +125,32 @@ class GamificationService:
         # Intelligent mappings for new frontend types
         intelligent_mappings = {
             # Gaming related
-            "game_marathon": CouponType.PLAY_GAMES,
-            "retro_gaming": CouponType.PLAY_GAMES,
+            "game_marathon": "play_games",
+            "retro_gaming": "play_games",
             
             # Entertainment related  
-            "movie_marathon": CouponType.WATCH_NETFLIX,
-            "watch_netflix": CouponType.WATCH_NETFLIX,
+            "movie_marathon": "watch_netflix",
+            "watch_netflix": "watch_netflix",
             
             # Social/Media related
-            "social_media": CouponType.SCROLL_INSTAGRAM,
-            "music_session": CouponType.LISTEN_MUSIC,
-            "one_song": CouponType.LISTEN_MUSIC,
+            "social_media": "scroll_instagram",
+            "music_session": "listen_music",
+            "one_song": "listen_music",
             
             # Food related
-            "food_festival": CouponType.EAT_SNACK,
-            "coffee_break": CouponType.EAT_SNACK,
+            "food_festival": "eat_snack",
+            "coffee_break": "eat_snack",
             
             # Relaxation related
-            "mini_meditation": CouponType.TAKE_NAP,
-            "short_walk": CouponType.TAKE_NAP,
+            "mini_meditation": "take_nap",
+            "short_walk": "take_nap",
             
             # Reading/Learning
-            "quick_read": CouponType.BROWSE_REDDIT,
-            "check_email": CouponType.BROWSE_REDDIT,
+            "quick_read": "browse_reddit",
+            "check_email": "browse_reddit",
             
             # Creative
-            "creative_time": CouponType.LISTEN_MUSIC,
+            "creative_time": "listen_music",
         }
         
         if frontend_coupon_type in intelligent_mappings:
@@ -285,15 +158,15 @@ class GamificationService:
         
         # Fallback to most common coupon type for unknown types
         logging.warning(f"Unknown frontend coupon type: {frontend_coupon_type}, falling back to SCROLL_INSTAGRAM")
-        return CouponType.SCROLL_INSTAGRAM
+        return "scroll_instagram"
     
-    async def process_task_completion(self, task_id: UUID) -> Dict[str, Any]:
+    def process_task_completion(self, task_id: UUID) -> Dict[str, Any]:
         """Process task completion with XP rewards only (no coupons)."""
-        task = await self.objective_repo.get_by_id(task_id)
-        if not task or task.status != ObjectiveStatus.COMPLETED:
+        task = self.objective_repo.get_by_id(task_id)
+        if not task or task.status != "completed":
             return {"success": False, "message": "Task not found or not completed"}
         
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(task.user_id)
         
         # === XP CALCULATION FOR TASKS ===
         base_xp = settings.points_per_task if hasattr(settings, 'points_per_task') else 25
@@ -363,7 +236,7 @@ class GamificationService:
         user_profile.overall_score += base_points
         
         # === ACHIEVEMENT CHECKING ===
-        unlocked_achievements = await self._check_achievements(user_profile)
+        unlocked_achievements = self._check_achievements(user_profile)
         
         # Add achievement XP bonus
         achievement_xp = len(unlocked_achievements) * 50
@@ -371,16 +244,16 @@ class GamificationService:
             user_profile.add_experience(achievement_xp)
         
         # === STREAK UPDATE ===
-        streak_result = await self._update_streak_system(user_profile)
+        streak_result = self._update_streak_system(user_profile)
         
         # === WEEKLY CHALLENGE PROGRESS ===
-        weekly_progress = await self._update_weekly_challenge(user_profile)
+        weekly_progress = self._update_weekly_challenge(user_profile)
         
         # === EXPIRE OLD COUPONS ===
-        await self._expire_old_coupons(user_profile)
+        self._expire_old_coupons(user_profile)
         
         # Save updated profile
-        await self.user_repo.save_profile(user_profile)
+        self.user_repo.update(user_profile)
         
         # === RESPONSE (XP ONLY) ===
         return {
@@ -427,27 +300,36 @@ class GamificationService:
             "celebration": f"🎯 TASK COMPLETE! +{total_task_xp} XP earned!"
         }
     
-    async def _expire_old_coupons(self, user_profile: UserProfile) -> None:
-        """Remove expired coupons from user profile."""
+    def _expire_old_coupons(self, user_profile: UserProfile) -> None:
+        """Mark expired coupons as used without mutating the relationship list.
+        This avoids NOT NULL FK issues on earned_coupons.user_id during merges.
+        """
         now = datetime.utcnow()
         expired_count = 0
-        
-        # Remove expired coupons
-        active_coupons = []
+
+        if not user_profile.earned_coupons:
+            return
+
         for coupon in user_profile.earned_coupons:
-            if coupon.expires_at > now:
-                active_coupons.append(coupon)
-            else:
-                expired_count += 1
-        
-        user_profile.earned_coupons = active_coupons
-        
+            # Use expiration_date field instead of expires_at
+            expiration_time = coupon.expiration_date or datetime.utcnow() + timedelta(hours=24)
+            if expiration_time <= now and not coupon.is_used:
+                try:
+                    # Persist as used in DB
+                    self.user_repo.use_coupon(coupon.id)
+                    # Reflect in-memory state to keep filtering accurate in this request
+                    coupon.is_used = True
+                    coupon.used_at = datetime.utcnow()
+                    expired_count += 1
+                except Exception:
+                    logging.exception("Error marking expired coupon as used")
+
         if expired_count > 0:
             print(f"🗑️ Expired {expired_count} coupons")
     
-    async def use_coupon(self, coupon_id: UUID) -> Dict[str, Any]:
+    def use_coupon(self, user_id: UUID, coupon_id: UUID) -> Dict[str, Any]:
         """Use a coupon to redeem the reward."""
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(user_id)
         
         # Find the coupon
         coupon = None
@@ -459,8 +341,9 @@ class GamificationService:
         if not coupon:
             return {"success": False, "message": "Coupon not found or already used"}
         
-        # Check if expired
-        if coupon.expires_at < datetime.utcnow():
+        # Check if expired - use expiration_date field
+        expiration_time = coupon.expiration_date or datetime.utcnow() + timedelta(hours=24)
+        if expiration_time < datetime.utcnow():
             return {"success": False, "message": "Coupon has expired"}
         
         # Mark as used
@@ -469,13 +352,14 @@ class GamificationService:
         user_profile.total_coupons_used += 1
         
         # Get coupon definition
-        coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
+        coupon_definitions = self._get_user_coupon_definitions(user_profile)
+        coupon_def = next((c for c in coupon_definitions if c.coupon_type == coupon.coupon_type), None)
         
         # Use the preserved display name from the wheel, fallback to backend definition
         display_name = coupon.display_name or (coupon_def.display_name if coupon_def else "Unknown")
         
         # Save profile
-        await self.user_repo.save_profile(user_profile)
+        self.user_repo.update(user_profile)
         
         return {
             "success": True,
@@ -485,9 +369,9 @@ class GamificationService:
             "celebration": f"🎉 {display_name} activated!"
         }
     
-    async def open_mystery_box(self, frontend_choice: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def open_mystery_box(self, user_id: UUID, frontend_choice: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Open a mystery box with coupon rewards (backend-first selection)."""
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(user_id)
         
         available_boxes = user_profile.mystery_boxes_earned - user_profile.mystery_boxes_opened
         if available_boxes <= 0:
@@ -520,9 +404,7 @@ class GamificationService:
         # Step 3: Load reward configuration to get actual segments
         reward_config = None
         try:
-            from api.endpoints.user_api import get_user_repo
-            user_repo = get_user_repo()
-            profile = await user_repo.ensure_default_profile()
+            profile = user_profile
             
             if profile.custom_reward_config and profile.use_custom_rewards:
                 # Use custom configuration
@@ -587,6 +469,7 @@ class GamificationService:
                 backend_coupon_type = self._map_to_backend_coupon_type(segment_type)
                 coupon = self._create_coupon_with_expiration(
                     backend_coupon_type,
+                    user_profile,
                     display_name=segment_name
                 )
                 coupons_earned.append(coupon)
@@ -595,15 +478,17 @@ class GamificationService:
         # Add coupons to profile (if any earned)
         if coupons_earned:
             for coupon in coupons_earned:
-                user_profile.earned_coupons.append(coupon)
+                # Persist coupon with proper user_id using repository
+                self.user_repo.add_coupon(user_profile.id, coupon)
                 user_profile.total_coupons_earned += 1
-        
-        await self.user_repo.save_profile(user_profile)
+
+        self.user_repo.update(user_profile)
         
         # Prepare coupon descriptions
         coupon_descriptions = []
+        coupon_definitions = self._get_user_coupon_definitions(user_profile)
         for coupon in coupons_earned:
-            coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
+            coupon_def = next((c for c in coupon_definitions if c.coupon_type == coupon.coupon_type), None)
             if coupon_def:
                 display_name = coupon.display_name or coupon_def.display_name
                 coupon_descriptions.append(f"{display_name} ({coupon_def.duration_minutes}min)")
@@ -611,7 +496,7 @@ class GamificationService:
         # Get the actual coupon types for wheel synchronization
         coupon_types_earned = []
         for coupon in coupons_earned:
-            coupon_types_earned.append(coupon.coupon_type.value)
+            coupon_types_earned.append(coupon.coupon_type)
         
         # Select a primary coupon for wheel display
         primary_coupon_type = coupon_types_earned[0] if coupon_types_earned else None
@@ -649,7 +534,7 @@ class GamificationService:
             }
         }
     
-    async def _update_streak_system(self, user_profile: UserProfile) -> Dict[str, Any]:
+    def _update_streak_system(self, user_profile: UserProfile) -> Dict[str, Any]:
         """Enhanced streak system with insurance and psychological pressure."""
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -701,7 +586,7 @@ class GamificationService:
             "streak_message": locals().get('streak_message', f"🔥 {user_profile.current_streak_days} day streak!")
         }
     
-    async def _update_weekly_challenge(self, user_profile: UserProfile) -> Dict[str, Any]:
+    def _update_weekly_challenge(self, user_profile: UserProfile) -> Dict[str, Any]:
         """Weekly challenges with urgency and variable targets."""
         current_week = datetime.utcnow().isocalendar()[1]
         
@@ -752,71 +637,46 @@ class GamificationService:
             "progress_percentage": min(progress_pct, 100)
         }
     
-    async def _check_achievements(self, user_profile: UserProfile) -> List[Dict[str, Any]]:
-        """Achievement system updated for coupon system."""
+    def _check_achievements(self, user_profile: UserProfile) -> List[Dict[str, Any]]:
+        """Check for newly unlocked achievements using user-specific definitions."""
         unlocked = []
         
-        # Get current stats
-        all_objectives = await self.objective_repo.get_all()
-        completed_tasks = len([
-            obj for obj in all_objectives 
-            if obj.objective_type == ObjectiveType.TASK and obj.status == ObjectiveStatus.COMPLETED
-        ])
-        
-        # Build evaluation context for coupon system
-        context = {
-            "completed_tasks": completed_tasks,
+        # Get current user stats
+        stats = {
+            "daily_tasks_completed": user_profile.daily_tasks_completed_today,
+            "current_streak_days": user_profile.current_streak_days,
             "total_coupons_earned": user_profile.total_coupons_earned,
             "total_coupons_used": user_profile.total_coupons_used,
-            "current_streak": user_profile.current_streak_days,
-            "daily_tasks_today": user_profile.daily_tasks_completed_today,
             "mystery_boxes_opened": user_profile.mystery_boxes_opened,
-            "early_completions": 5,  # Placeholder - would track this
-            "quick_completions": 3,  # Placeholder - would track this
-            "weekend_tasks": 2,  # Placeholder - would track this
-            "late_night_tasks": 1,  # Placeholder - would track this
-            "max_decomposition": 5  # Placeholder - would calculate this
+            "weekend_tasks": getattr(user_profile, 'weekend_tasks_completed', 0),
+            "late_night_tasks": getattr(user_profile, 'late_night_tasks_completed', 0)
         }
         
-        # Check each achievement
-        for achievement_def in self._achievement_definitions:
+        # Get user's achievement definitions
+        achievement_definitions = self._get_user_achievement_definitions(user_profile)
+        
+        # Check each achievement definition
+        for achievement_def in achievement_definitions:
             # Skip if already unlocked
-            if any(ach.achievement_id == achievement_def.id for ach in user_profile.achievements):
+            if any(ach.achievement_id == achievement_def.achievement_id for ach in user_profile.achievements):
                 continue
             
-            # Simple criteria evaluation
-            criteria_met = self._evaluate_achievement_criteria(achievement_def.criteria_code, context)
-            
-            if criteria_met:
-                # Unlock with fanfare
-                new_achievement = UserAchievement(
-                    achievement_id=achievement_def.id,
-                    unlocked_at=datetime.utcnow()
-                )
-                user_profile.achievements.append(new_achievement)
-                user_profile.overall_score += achievement_def.points_value
-                
-                # Award XP for achievement instead of coupon
-                achievement_xp_bonus = achievement_def.points_value
-                user_profile.add_experience(achievement_xp_bonus)
-                
-                # Determine rarity message
-                rarity = "Common"
-                if "Rare" in achievement_def.description:
-                    rarity = "⭐ RARE"
-                elif "Epic" in achievement_def.description:
-                    rarity = "💎 EPIC"
-                elif "Limited Time" in achievement_def.description:
-                    rarity = "⏰ LIMITED"
-                
-                unlocked.append({
-                    "name": achievement_def.name,
-                    "description": achievement_def.description,
-                    "points": achievement_def.points_value,
-                    "rarity": rarity,
-                    "xp_earned": achievement_xp_bonus,
-                    "celebration": f"🎉 Achievement Unlocked: {achievement_def.name}!"
-                })
+            # Evaluate criteria
+            try:
+                if self._evaluate_achievement_criteria(achievement_def.criteria_code, stats):
+                    # Persist new achievement via repository to avoid duplicates and ensure DB save
+                    persisted = self.user_repo.add_achievement(user_profile.id, achievement_def.achievement_id)
+                    # Keep in-memory list consistent
+                    user_profile.achievements.append(persisted)
+                    unlocked.append({
+                        "id": achievement_def.achievement_id,
+                        "name": achievement_def.name,
+                        "description": achievement_def.description,
+                        "points": achievement_def.points_value,
+                        "icon": achievement_def.icon or '🏆'
+                    })
+            except Exception as e:
+                logging.warning(f"Error evaluating achievement {achievement_def.achievement_id}: {e}")
         
         return unlocked
     
@@ -831,7 +691,7 @@ class GamificationService:
         except:
             return False
     
-    async def _generate_psychological_hooks(self, user_profile: UserProfile) -> Dict[str, Any]:
+    def _generate_psychological_hooks(self, user_profile: UserProfile) -> Dict[str, Any]:
         """Generate messages designed to increase engagement with coupon system."""
         hooks = []
         
@@ -873,12 +733,12 @@ class GamificationService:
             "coupon_pressure": active_coupons > 0,
             "mystery_box_pressure": progress_pct > 75,
             "streak_anxiety": user_profile.current_streak_days >= 5,
-            "fomo_active": len(user_profile.limited_time_achievements_available) > 0
+            "fomo_active": len(user_profile.limited_time_achievements_available or []) > 0
         }
     
-    async def get_daily_status(self) -> Dict[str, Any]:
+    def get_daily_status(self, user_id: UUID) -> Dict[str, Any]:
         """Get daily status with coupon-based information."""
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(user_id)
         
         # Calculate days since last activity for pressure
         if user_profile.last_activity_date:
@@ -904,13 +764,14 @@ class GamificationService:
             user_profile.rank_this_week = max(1, user_profile.rank_this_week + random.randint(-2, 2))
         
         # Expire old coupons
-        await self._expire_old_coupons(user_profile)
+        self._expire_old_coupons(user_profile)
         
         # Calculate coupon stats
-        active_coupons = len([c for c in user_profile.earned_coupons if not c.is_used])
+        earned_coupons = user_profile.earned_coupons or []
+        active_coupons = len([c for c in earned_coupons if not c.is_used])
         mystery_box_progress_pct = (user_profile.mystery_box_progress / user_profile.points_per_mystery_box) * 100
         
-        await self.user_repo.save_profile(user_profile)
+        self.user_repo.update(user_profile)
         
         return {
             "current_coupons": active_coupons,
@@ -928,7 +789,7 @@ class GamificationService:
             "daily_bonus_message": daily_bonus_message,
             "decay_warning": user_profile.progress_decay_warning,
             "days_inactive": user_profile.days_since_last_activity,
-            "psychological_hooks": await self._generate_psychological_hooks(user_profile),
+            "psychological_hooks": self._generate_psychological_hooks(user_profile),
             "urgency_factors": {
                 "streak_at_risk": user_profile.days_since_last_activity >= 1,
                 "bonus_expiring": user_profile.daily_bonus_available,
@@ -938,9 +799,9 @@ class GamificationService:
             }
         }
 
-    async def claim_daily_bonus(self) -> Dict[str, Any]:
+    def claim_daily_bonus(self, user_id: UUID) -> Dict[str, Any]:
         """Claim daily bonus with XP rewards instead of coupons."""
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(user_id)
         
         if not user_profile.daily_bonus_available:
             return {
@@ -990,7 +851,7 @@ class GamificationService:
             user_profile.streak_insurance_count += 1
             extra_rewards.append("🛡️ Streak insurance!")
         
-        await self.user_repo.save_profile(user_profile)
+        self.user_repo.update(user_profile)
         
         return {
             "success": True,
@@ -1003,22 +864,22 @@ class GamificationService:
             "celebration": f"🎁 {bonus_message}"
         }
     
-    async def process_objective_completion(self, objective_id: UUID) -> Dict[str, Any]:
+    def process_objective_completion(self, objective_id: UUID) -> Dict[str, Any]:
         """Process objective completion with XP rewards instead of coupons."""
         print(f"🔍 Looking for objective with ID: {objective_id}")
         print(f"🗄️ Repository type: {type(self.objective_repo)}")
         
-        objective = await self.objective_repo.get_by_id(objective_id)
+        objective = self.objective_repo.get_by_id(objective_id)
         print(f"📋 Found objective: {objective}")
         
-        if not objective or objective.status != ObjectiveStatus.COMPLETED:
+        if not objective or objective.status != "completed":
             print(f"❌ Objective validation failed - Found: {objective is not None}, Status: {objective.status if objective else 'None'}")
             return {"success": False, "message": "Objective not found or not completed"}
         
         print(f"🎯 Processing completion for {objective.objective_type}: {objective.title}")
         print(f"📊 Priority: {objective.priority_score}, Complexity: {objective.complexity_score}")
         
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(objective.user_id)
         
         # === XP CALCULATION ===
         base_xp = settings.points_per_objective if hasattr(settings, 'points_per_objective') else 100
@@ -1028,11 +889,15 @@ class GamificationService:
         complexity_bonus = int(base_xp * objective.complexity_score)
         priority_bonus = int(base_xp * objective.priority_score) 
         
-        # Objective type bonus
+        # Objective type bonus (compare against lowercase string values)
         type_bonus = 0
-        if objective.objective_type == ObjectiveType.MAIN_OBJECTIVE:
+        try:
+            obj_type = (objective.objective_type or "").lower()
+        except Exception:
+            obj_type = ""
+        if obj_type == "main_objective":
             type_bonus = base_xp * 2  # Main objectives give 3x total XP
-        elif objective.objective_type == ObjectiveType.SUB_OBJECTIVE:
+        elif obj_type == "sub_objective":
             type_bonus = base_xp * 0.5  # Sub objectives give 1.5x total XP
             
         print(f"🎲 Bonuses - Complexity: {complexity_bonus}, Priority: {priority_bonus}, Type: {type_bonus}")
@@ -1073,7 +938,7 @@ class GamificationService:
         print(f"👤 User profile after: Level {user_profile.level}, XP: {user_profile.experience_points}")
         
         # Check for achievements
-        unlocked_achievements = await self._check_achievements(user_profile)
+        unlocked_achievements = self._check_achievements(user_profile)
         
         # Add achievement XP bonus
         achievement_xp = len(unlocked_achievements) * 50
@@ -1083,7 +948,7 @@ class GamificationService:
         # Update overall score for legacy systems
         user_profile.overall_score += total_xp
         
-        await self.user_repo.save_profile(user_profile)
+        self.user_repo.update(user_profile)
         print(f"💾 User profile saved")
         
         # === PREPARE RESPONSE ===
@@ -1126,34 +991,37 @@ class GamificationService:
         
         return response
     
-    async def get_available_coupons(self) -> Dict[str, Any]:
+    def get_available_coupons(self, user_id: UUID) -> Dict[str, Any]:
         """Get user's available coupons with expiration info."""
-        user_profile = await self.user_repo.ensure_default_profile()
+        user_profile = self.user_repo.get_by_id(user_id)
         
         # Expire old coupons first
-        await self._expire_old_coupons(user_profile)
+        self._expire_old_coupons(user_profile)
         
         # Get active coupons
         active_coupons = []
+        coupon_definitions = self._get_user_coupon_definitions(user_profile)
         for coupon in user_profile.earned_coupons:
             if not coupon.is_used:
-                coupon_def = next((c for c in self._coupon_definitions if c.coupon_type == coupon.coupon_type), None)
+                coupon_def = next((c for c in coupon_definitions if c.coupon_type == coupon.coupon_type), None)
                 if coupon_def:
-                    hours_left = (coupon.expires_at - datetime.utcnow()).total_seconds() / 3600
+                    # Use expiration_date field instead of expires_at
+                    expiration_time = coupon.expiration_date or datetime.utcnow() + timedelta(hours=24)
+                    hours_left = (expiration_time - datetime.utcnow()).total_seconds() / 3600
                     # Use the preserved display name from the wheel, fallback to backend definition
                     display_name = coupon.display_name or coupon_def.display_name
                     active_coupons.append({
                         "id": str(coupon.id),
-                        "type": coupon.coupon_type.value,
+                        "type": coupon.coupon_type,  # Remove .value since it's already a string
                         "display_name": display_name,
                         "description": coupon_def.description,
                         "duration_minutes": coupon_def.duration_minutes,
                         "rarity": coupon_def.rarity,
-                        "expires_at": coupon.expires_at.isoformat(),
+                        "expires_at": expiration_time.isoformat(),
                         "hours_left": max(0, hours_left)
                     })
         
-        await self.user_repo.save_profile(user_profile)
+        self.user_repo.update(user_profile)
         
         return {
             "active_coupons": active_coupons,
@@ -1162,13 +1030,21 @@ class GamificationService:
             "expiration_warning": len(active_coupons) > 0
         }
     
-    async def get_user_achievements(self) -> List[AchievementDefinition]:
-        """Get all available achievement definitions for the frontend."""
-        return self._achievement_definitions
+    def get_user_achievements(self, user_id: UUID) -> List[UserAchievementDefinition]:
+        """Get all available achievement definitions for a specific user."""
+        user_profile = self.user_repo.get_by_id(user_id)
+        achievement_definitions = self._get_user_achievement_definitions(user_profile)
+        
+        # If no achievement definitions exist, create default ones
+        if not achievement_definitions:
+            self.logger.warning("No achievement definitions found for user, this should not happen after proper initialization")
+            
+        return achievement_definitions
     
-    async def get_coupon_definitions(self) -> List[CouponDefinition]:
-        """Get all available coupon definitions for the frontend."""
-        return self._coupon_definitions
+    def get_coupon_definitions(self, user_id: UUID) -> List[UserCouponDefinition]:
+        """Get all available coupon definitions for the specified user"""
+        user_profile = self.user_repo.get_by_id(user_id)
+        return self._get_user_coupon_definitions(user_profile)
     
     def _calculate_luck_boost(self, user_profile: UserProfile) -> float:
         """Calculate luck boost based on user's luck factor and recent activity."""

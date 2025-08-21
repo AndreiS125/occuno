@@ -62,13 +62,13 @@
   --fc-list-event-hover-bg-color: hsl(var(--muted));
 }
 
-/* Hour grid lines only - clean and minimal */
+/* Hour grid lines only - clean and minimal with proper dark/light mode visibility */
 .fc-timegrid-slot-major {
-  border-top: 1px solid hsl(var(--border) / 0.6) !important;
+  border-top: 1px solid hsl(var(--border) / 0.4) !important;
 }
 
 .fc-timegrid-slot[data-time$=":00:00"] {
-  border-top: 1px solid hsl(var(--border) / 0.6) !important;
+  border-top: 1px solid hsl(var(--border) / 0.4) !important;
 }
 
 /* Remove half-hour lines for cleaner appearance */
@@ -78,6 +78,37 @@
 
 .fc-timegrid-slot[data-time$=":30:00"] {
   border-top: none !important;
+}
+
+/* DARK MODE: Much brighter white grid lines */
+.dark .fc-timegrid-slot-major,
+.dark .fc-timegrid-slot[data-time$=":00:00"],
+[data-theme="dark"] .fc-timegrid-slot-major,
+[data-theme="dark"] .fc-timegrid-slot[data-time$=":00:00"] {
+  border-top: 1px solid rgba(255, 255, 255, 0.6) !important;
+}
+
+/* LIGHT MODE: Subtle grid lines */
+.light .fc-timegrid-slot-major,
+.light .fc-timegrid-slot[data-time$=":00:00"],
+[data-theme="light"] .fc-timegrid-slot-major,
+[data-theme="light"] .fc-timegrid-slot[data-time$=":00:00"] {
+  border-top: 1px solid hsl(var(--border) / 0.4) !important;
+}
+
+/* System preference fallbacks with BRIGHT white lines in dark mode */
+@media (prefers-color-scheme: dark) {
+  .fc-timegrid-slot-major,
+  .fc-timegrid-slot[data-time$=":00:00"] {
+    border-top: 1px solid rgba(255, 255, 255, 0.6) !important;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .fc-timegrid-slot-major,
+  .fc-timegrid-slot[data-time$=":00:00"] {
+    border-top: 1px solid hsl(var(--border) / 0.4) !important;
+  }
 }
 
 /* Ensure time axis labels align properly with grid lines */
@@ -111,6 +142,30 @@
 /* Improve time slot precision for better event positioning */
 .fc-timegrid-slot {
   height: auto !important; /* Let FullCalendar calculate proper heights */
+}
+
+/* COMPACT HOUR BLOCKS - Make them 2x smaller */
+.fc-timegrid-slot {
+  min-height: 20px !important; /* 2x smaller than default ~40px */
+}
+
+.fc-timegrid-slot-major {
+  height: 10px !important; /* Main hour slots are much more compact */
+}
+
+.fc-timegrid-slot-minor {
+  height: 10px !important; /* Half-hour slots even more compact */
+}
+
+/* Adjust time axis to match smaller slots */
+.fc-timegrid-axis {
+  width: 50px !important; /* Slightly narrower since slots are smaller */
+}
+
+.fc-timegrid-axis-cushion {
+  font-size: 0.7rem !important; /* Smaller font for compact view */
+  line-height: 20px !important; /* Match slot height */
+  padding-top: 2px !important;
 }
 
 /* More precise time grid for better event alignment */
@@ -442,4 +497,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-} 
+}
+
+/* Ensure calendar stretches to the full container width */
+.aux-calendar-container {
+  min-width: 0; /* allow flex child to grow/shrink */
+}
+
+.aux-calendar-container .fc,
+.aux-calendar-container .fc .fc-view-harness,
+.aux-calendar-container .fc .fc-scroller,
+.aux-calendar-container .fc .fc-scrollgrid,
+.aux-calendar-container .fc .fc-scrollgrid-sync-table,
+.aux-calendar-container .fc .fc-scroller-harness,
+.aux-calendar-container .fc .fc-view,
+.aux-calendar-container .fc .fc-timegrid-body,
+.aux-calendar-container .fc .fc-daygrid-body,
+.aux-calendar-container .fc .fc-timegrid-body table,
+.aux-calendar-container .fc .fc-daygrid-body table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed !important; /* for tables, ignored elsewhere */
+}

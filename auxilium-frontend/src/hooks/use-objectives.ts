@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import axios from "axios";
 import { Objective, ObjectiveType } from "@/types";
 import { objectivesApi } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -23,22 +24,53 @@ export function useObjectives(): UseObjectivesReturn {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Load objectives
   const loadObjectives = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { data } = await objectivesApi.list();
-      setObjectives(data);
-    } catch (err) {
-      const error = err as Error;
-      setError(error);
-      console.error("Failed to load objectives:", error);
-      toast.error("Failed to load objectives");
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    setError(null);
+
+    const isCanceled = (err: any) =>
+      (axios as any).isCancel?.(err) || err?.code === "ERR_CANCELED" || err?.name === "CanceledError";
+
+    let attempt = 0;
+    const maxAttempts = 2; // 1 retry
+
+    while (attempt < maxAttempts) {
+      try {
+        const { data } = await objectivesApi.list();
+        if (!isMountedRef.current) return;
+        setObjectives(data);
+        break;
+      } catch (err) {
+        if (isCanceled(err)) {
+          if (!isMountedRef.current) return;
+          setError(err as Error);
+          // Do not toast for canceled requests
+          break;
+        }
+        attempt += 1;
+        if (attempt >= maxAttempts) {
+          if (!isMountedRef.current) return;
+          const error = err as Error;
+          setError(error);
+          console.error("Failed to load objectives:", error);
+          toast.error("Failed to load objectives");
+          break;
+        }
+        // brief backoff before retry
+        await new Promise((res) => setTimeout(res, 150));
+      }
     }
+    if (isMountedRef.current) setLoading(false);
   }, []);
 
   // Initial load

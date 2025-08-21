@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { GanttChart } from "@/components/calendar/gantt-chart";
 import { FullCalendarModern } from "@/components/calendar/fullcalendar-modern";
 import { useCalendarView } from "@/components/layout/navigation";
-import { objectivesApi } from "@/lib/api";
+import api, { objectivesApi } from "@/lib/api";
 import toast from "react-hot-toast";
+import { ObjectiveStatus } from "@/types";
 
 export default function CalendarPage() {
   const { viewMode } = useCalendarView();
@@ -19,12 +20,34 @@ export default function CalendarPage() {
   });
 
   const handleUpdate = async (id: string, updates: any) => {
+    const isCompleting =
+      updates?.status === ObjectiveStatus.COMPLETED ||
+      (typeof updates?.completion_percentage === "number" && updates.completion_percentage >= 100);
+
     try {
-      await objectivesApi.update(id, updates);
-      toast.success("Objective updated!");
+      if (isCompleting) {
+        const payload = { ...updates };
+        if (!payload.status) payload.status = ObjectiveStatus.COMPLETED;
+        if (
+          typeof payload.completion_percentage !== "number" ||
+          payload.completion_percentage < 100
+        ) {
+          payload.completion_percentage = 100;
+        }
+
+        const response = await api.put(`/objectives/${id}?include_gamification=true`, payload);
+        const gamification = response?.data?.gamification;
+        toast.success(`🎯 +${gamification?.total_xp_earned || 0} XP earned!`);
+        if (gamification?.level_info?.leveled_up) {
+          toast.success(`🎆 LEVEL UP! You reached level ${gamification.level_info.current_level}!`);
+        }
+      } else {
+        await objectivesApi.update(id, updates);
+        toast.success("Objective updated!");
+      }
       refetch();
     } catch (error) {
-      toast.error("Failed to update objective");
+      toast.error(isCompleting ? "Failed to complete objective" : "Failed to update objective");
     }
   };
 

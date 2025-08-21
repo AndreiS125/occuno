@@ -5,7 +5,6 @@ A modern, Apple-inspired web interface for the Auxilium AI Productivity Planner.
 ## Features
 
 - 🎨 **Apple-like Design**: Clean, minimalist interface with smooth animations
-- 🤖 **AI Chat Interface**: Natural language interaction with your productivity assistant
 - 📊 **Dashboard**: Real-time statistics and progress tracking
 - 🎯 **Hierarchical Objectives**: Visual tree structure for goals and tasks
 - 🏆 **Gamification**: Points, streaks, and achievements
@@ -64,7 +63,6 @@ The design follows Apple's Human Interface Guidelines with:
 src/
 ├── app/              # Next.js app router pages
 ├── components/       # React components
-│   ├── chat/        # AI chat interface
 │   ├── dashboard/   # Dashboard components
 │   ├── gamification/# Score and achievement components
 │   ├── objectives/  # Objective management components
@@ -80,12 +78,6 @@ src/
 - Real-time statistics grid
 - Quick action cards for common tasks
 - Hierarchical objective tree view
-
-### AI Chat Interface
-- Slide-out panel design
-- Message history with role indicators
-- Loading states and error handling
-- Toast notifications for actions
 
 ### Objective Management
 - Expandable tree structure

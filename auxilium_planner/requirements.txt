@@ -5,6 +5,9 @@ pydantic==2.11.0
 pydantic-settings==2.2.1
 python-dotenv==1.0.1
 
+# SQLModel for unified data models
+sqlmodel==0.0.24
+
 # Additional dependencies
 python-multipart==0.0.9
 aiofiles==23.2.1
@@ -15,16 +18,16 @@ pytest==8.1.1
 pytest-asyncio==0.23.5
 httpx==0.28.0
 
+# Authentication and OAuth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+google-auth==2.28.1
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+itsdangerous==2.1.2
+
 # Utilities
 uuid==1.30
 datetime==5.4
 
-# LangChain and LangGraph for AI Agents
-langchain==0.2.5
-langchain-core==0.2.43
-langchain-google-genai==1.0.10
-langgraph==0.2.0
-langgraph-checkpoint==1.0.12
-
-# Additional LangChain dependencies
-langsmith==0.1.147 
+ 

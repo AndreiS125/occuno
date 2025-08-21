@@ -7,14 +7,15 @@ import { Toaster } from "react-hot-toast";
 import { ThemeLoader } from "@/components/theme-loader";
 import { NotificationManager } from "@/components/notification-manager";
 import { ConditionalLayout } from "@/components/layout/conditional-layout";
+import { AuthProvider } from "@/hooks/useAuth";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Auxilium - Advanced Productivity Planner",
+  title: "Occuno - AI-Powered Planning Platform",
   description: "Next-generation productivity command center with AI-powered task management, intelligent scheduling, and comprehensive goal tracking",
   keywords: ["productivity", "planning", "goals", "tasks", "calendar", "analytics"],
-  authors: [{ name: "Auxilium Team" }],
+  authors: [{ name: "Occuno Team" }],
 };
 
 export const viewport: Viewport = {
@@ -39,23 +40,25 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} antialiased`} suppressHydrationWarning>
         <Providers>
-          <ThemeLoader />
-          <NotificationManager />
-          
-          <CalendarViewProvider>
-            <div className="min-h-screen bg-background relative">
-              {/* Simplified background - no interfering elements */}
-              <div className="fixed inset-0 bg-gradient-to-br from-background via-background to-muted/5 pointer-events-none" />
-              
-              {/* Main content */}
-              <div className="relative z-10">
-                <NavigationWrapper />
-                <ConditionalLayout>
-                  {children}
-                </ConditionalLayout>
+          <AuthProvider>
+            <ThemeLoader />
+            <NotificationManager />
+            
+            <CalendarViewProvider>
+              <div className="min-h-screen bg-background relative">
+                {/* Simplified background - no interfering elements */}
+                <div className="fixed inset-0 bg-gradient-to-br from-background via-background to-muted/5 pointer-events-none" />
+                
+                {/* Main content */}
+                <div className="relative z-10">
+                  <NavigationWrapper />
+                  <ConditionalLayout>
+                    {children}
+                  </ConditionalLayout>
+                </div>
               </div>
-            </div>
-          </CalendarViewProvider>
+            </CalendarViewProvider>
+          </AuthProvider>
           
           {/* Enhanced toast notifications */}
           <Toaster 

@@ -7,13 +7,13 @@ export * from "./checkbox";
 export * from "./switch";
 export * from "./select";
 export * from "./range";
-export * from "./range";
 
 // Layout Components
 export * from "./card";
 export * from "./dialog";
 export * from "./scroll-area";
 export * from "./badge";
+export * from "./separator";
 
 // Custom Components
 export * from "./loading-spinner";
@@ -24,3 +24,4 @@ export { default as MysteryBoxRealistic } from './mystery-box-realistic';
 
 // Feedback Components
 export * from "./modern-effects"; 
+export * from "./alert";

@@ -1,73 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* High-tech color scheme with cyberpunk vibes - IMPROVED CONTRAST */
-    --background: 220 27% 8%;  /* Deep dark blue-black */
-    --foreground: 210 100% 98%;
-    --card: 220 27% 12%;  /* More contrast from background */
-    --card-foreground: 210 100% 98%;
-    --popover: 220 27% 14%;  /* Lighter for better visibility */
-    --popover-foreground: 210 100% 98%;
-    --primary: 173 80% 50%;  /* Slightly brighter cyan */
-    --primary-foreground: 220 27% 8%;
-    --secondary: 262 83% 65%;  /* Brighter electric purple */
-    --secondary-foreground: 220 27% 8%;
-    --muted: 220 27% 20%;  /* Much lighter for better contrast */
-    --muted-foreground: 215 20% 72%;  /* Higher contrast text */
-    --accent: 173 80% 45%;  /* Slightly brighter accent */
-    --accent-foreground: 220 27% 8%;
-    --destructive: 0 84% 65%;  /* Brighter red */
-    --destructive-foreground: 210 100% 98%;
-    --border: 220 27% 25%;  /* Much more visible borders */
-    --input: 220 27% 15%;  /* Better input contrast */
-    --ring: 173 80% 50%;  /* Brighter focus rings */
-    --radius: 1rem;
+    /* Minimalist productivity-focused color scheme */
+    --background: 0 0% 2%;  /* Pure black for maximum focus */
+    --foreground: 0 0% 98%;
+    --card: 0 0% 4%;  /* Subtle card elevation */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 210 100% 56%;  /* Clean blue for control */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 14%;  /* Neutral gray for subtlety */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 8%;  /* Minimal contrast */
+    --muted-foreground: 0 0% 60%;  /* Readable but subdued */
+    --accent: 142 76% 36%;  /* Subtle green for AI/success */
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 12%;  /* Subtle borders */
+    --input: 0 0% 6%;
+    --ring: 210 100% 56%;
+    --radius: 0.5rem;  /* Reduced radius for minimalism */
     
-    /* Glass morphism variables - enhanced */
-    --glass-bg: rgba(20, 25, 40, 0.9);  /* Less transparent */
-    --glass-border: rgba(59, 130, 246, 0.4);  /* More visible border */
-    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);  /* Stronger shadow */
+    /* Minimal glass effects */
+    --glass-bg: rgba(0, 0, 0, 0.8);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     
-    /* Glow effects - enhanced */
-    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.5);  /* Stronger glow */
-    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.5);
-    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.4);
+    /* Subtle glow effects */
+    --glow-primary: 0 0 20px rgba(59, 130, 246, 0.3);
+    --glow-accent: 0 0 20px rgba(34, 197, 94, 0.2);
   }
 
   .light {
-    /* Light mode with premium feel - improved contrast */
+    /* Light mode - clean and minimal */
     --background: 0 0% 100%;
-    --foreground: 220 27% 8%;
-    --card: 0 0% 98%;  /* Slight tint for better separation */
-    --card-foreground: 220 27% 8%;
+    --foreground: 0 0% 5%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 27% 8%;
-    --primary: 173 80% 40%;  /* Darker for better contrast on light */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 262 83% 55%;  /* Adjusted for light mode */
-    --secondary-foreground: 0 0% 100%;
-    --muted: 220 13% 92%;  /* Better contrast */
-    --muted-foreground: 220 13% 40%;  /* Darker text for readability */
-    --accent: 173 80% 40%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 55%;  /* Better contrast */
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 85%;  /* More visible borders */
-    --input: 220 13% 94%;  /* Better input visibility */
-    --ring: 173 80% 40%;
+    --popover-foreground: 0 0% 5%;
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 5%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 90%;
+    --input: 0 0% 96%;
+    --ring: 210 100% 50%;
     
-    /* Light mode glass - enhanced */
-    --glass-bg: rgba(255, 255, 255, 0.95);  /* Less transparent */
-    --glass-border: rgba(59, 130, 246, 0.3);  /* More visible */
-    --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);  /* Stronger shadow */
+    /* Light mode glass */
+    --glass-bg: rgba(255, 255, 255, 0.8);
+    --glass-border: rgba(0, 0, 0, 0.1);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     
     /* Light mode glows */
-    --glow-primary: 0 0 20px rgba(34, 197, 194, 0.4);
-    --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.4);
-    --glow-accent: 0 0 15px rgba(34, 197, 194, 0.3);
+    --glow-primary: 0 0 20px rgba(59, 130, 246, 0.2);
+    --glow-accent: 0 0 20px rgba(34, 197, 94, 0.1);
   }
 }
 
@@ -77,15 +78,19 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image: 
-      radial-gradient(circle at 20% 80%, rgba(34, 197, 194, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 40% 40%, rgba(34, 197, 194, 0.1) 0%, transparent 50%);
-    background-attachment: fixed;
+    /* Minimal background - pure focus */
+    background: hsl(var(--background));
   }
+}
+
+/* Brand font utility for product name */
+.font-brand {
+  font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0.2px;
 }
 
 /* Modern custom scrollbar */
