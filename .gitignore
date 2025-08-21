@@ -1,0 +1,79 @@
+# Monorepo .gitignore (Node + Python)
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Node / Frontend ---
+node_modules/
+**/node_modules/
+.npm/
+.npmrc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+.parcel-cache/
+.cache/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+dist/
+build/
+out/
+.turbo/
+coverage/
+coverage-*
+.vercel/
+.netlify/
+
+# --- Env files (keep examples) ---
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- Python / Backend ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+**/.venv/
+**/venv/
+.envrc
+.python-version
+
+# --- Python build/packaging ---
+build/
+share/python-wheels/
+pip-wheel-metadata/
+
+# --- Logs & databases ---
+logs/
+*.log
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# --- Misc ---
+*.tgz
+*.tar
+*.zip
