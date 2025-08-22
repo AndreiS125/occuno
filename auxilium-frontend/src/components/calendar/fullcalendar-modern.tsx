@@ -20,7 +20,9 @@ import {
   Trash2,
   Settings,
   ChevronDown,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { ObjectiveModal, CalendarManagementModal } from "@/components/modals";
 
@@ -78,6 +80,8 @@ export function FullCalendarModern({
   const [calendarModalMode, setCalendarModalMode] = useState<'create' | 'edit'>('create');
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [calendarTitle, setCalendarTitle] = useState("");
   
   // Calendar management
   const {
@@ -242,6 +246,14 @@ export function FullCalendarModern({
   useEffect(() => {
     initializeCalendars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Track viewport to switch to compact mobile toolbar
+  useEffect(() => {
+    const check = () => setIsMobile(typeof window !== 'undefined' && window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   // Ensure FullCalendar recalculates its size when the sidebar toggles
@@ -815,14 +827,83 @@ export function FullCalendarModern({
 
       {/* Main Calendar - always flex-1; sidebar presence dictates remaining width */}
       <div ref={calendarContainerRef} className="aux-calendar-container flex-1 min-w-0 w-full flex flex-col transition-all duration-300">
+        {/* Compact custom mobile toolbar (replaces FullCalendar header) */}
+        {isMobile && (
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Previous"
+                className="p-1 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-muted"
+                onClick={() => calendarRef.current?.getApi().prev()}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next"
+                className="p-1 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-muted"
+                onClick={() => calendarRef.current?.getApi().next()}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-muted"
+                onClick={() => calendarRef.current?.getApi().today()}
+              >
+                Today
+              </button>
+            </div>
+            <div className="flex-1 min-w-0 text-center">
+              <span className="text-sm font-semibold truncate">{calendarTitle}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-muted"
+                onClick={() => {
+                  const api = calendarRef.current?.getApi();
+                  if (!api) return;
+                  const order = ['dayGridMonth', 'timeGridWeek', 'listWeek'] as const;
+                  const idx = order.indexOf((api.view as any)?.type ?? 'timeGridWeek');
+                  const next = order[(idx + 1) % order.length];
+                  api.changeView(next);
+                }}
+              >
+                View
+              </button>
+            </div>
+          </div>
+        )}
         <FullCalendar
         ref={calendarRef}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin, multiMonthPlugin]}
-        headerToolbar={{
+        headerToolbar={isMobile ? (false as any) : {
           left: 'prev,next today',
           center: 'title',
           right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
         }}
+        buttonText={isMobile ? {
+          today: 'Tdy',
+          month: 'M',
+          week: 'W',
+          day: 'D',
+          list: 'L'
+        } : {
+          today: 'Today',
+          month: 'Month',
+          week: 'Week',
+          day: 'Day',
+          list: 'List'
+        }}
+        views={{
+          dayGridMonth: { titleFormat: { month: 'short', year: 'numeric' } as any },
+          timeGridWeek: { titleFormat: { month: 'short', day: 'numeric' } as any },
+          timeGridDay: { titleFormat: { month: 'short', day: 'numeric' } as any },
+          listWeek: { titleFormat: { month: 'short', day: 'numeric' } as any }
+        }}
+        datesSet={(arg) => setCalendarTitle(arg.view.title)}
         initialView='timeGridWeek'
         editable={true}
         selectable={true}

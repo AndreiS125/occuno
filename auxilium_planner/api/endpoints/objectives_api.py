@@ -73,6 +73,8 @@ class ObjectiveUpdateRequest(BaseModel):
     priority_score: Optional[float] = None
     complexity_score: Optional[float] = None
     energy_requirement: Optional[str] = None  # Use string values
+    context_tags: Optional[List[str]] = None
+    success_criteria: Optional[List[str]] = None
     status: Optional[str] = None  # Use string values
     completion_percentage: Optional[float] = None
     # Recurring fields
@@ -262,9 +264,9 @@ def update_objective(
     try:
         request_data = request.dict(exclude_unset=True)
         
-        # Initialize variables
-        start_date = None
-        due_date = None
+        # Initialize local working variables for date computations
+        start_dt = None
+        due_dt = None
         
         # For non-timed objectives, clear time-related fields
         if request_data.get('is_timed') is False:
@@ -280,28 +282,28 @@ def update_objective(
         
         # Auto-detect all-day events for multi-day tasks when dates are updated (only for timed objectives)
         elif request_data.get('is_timed') is not False:
-            start_date = request_data.get('start_date')
-            due_date = request_data.get('due_date')
+            start_dt = request_data.get('start_date')
+            due_dt = request_data.get('due_date')
             
             # Get existing objective to check current dates if only one is being updated
-            if (start_date or due_date) and not (start_date and due_date):
+            if (start_dt or due_dt) and not (start_dt and due_dt):
                 existing = objective_repo.get_by_id_and_user(objective_id, current_user.id)
                 if existing:
-                    if not start_date:
-                        start_date = existing.start_date
-                    if not due_date:
-                        due_date = existing.due_date
+                    if not start_dt:
+                        start_dt = existing.start_date
+                    if not due_dt:
+                        due_dt = existing.due_date
         
-        if start_date and due_date:
+        if start_dt and due_dt:
             # Check if task spans multiple days or is >= 24 hours
-            if isinstance(start_date, str):
-                start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            if isinstance(due_date, str):
-                due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+            if isinstance(start_dt, str):
+                start_dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
+            if isinstance(due_dt, str):
+                due_dt = datetime.fromisoformat(due_dt.replace('Z', '+00:00'))
             
             # Different days OR duration >= 24 hours
-            different_days = start_date.date() != due_date.date()
-            duration_hours = (due_date - start_date).total_seconds() / 3600
+            different_days = start_dt.date() != due_dt.date()
+            duration_hours = (due_dt - start_dt).total_seconds() / 3600
             is_long_duration = duration_hours >= 24
             
             if different_days or is_long_duration:
