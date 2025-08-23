@@ -1,6 +1,6 @@
-# Auxilium Frontend
+# Occuno Frontend
 
-A modern, Apple-inspired web interface for the Auxilium AI Productivity Planner.
+A modern, Apple-inspired web interface for the Occuno AI Productivity Planner.
 
 ## Features
 
@@ -108,4 +108,4 @@ src/
 
 ## License
 
-Part of the Auxilium Productivity Planner project. 
+Part of the Occuno Productivity Planner project. 

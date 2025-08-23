@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Launch script for Auxilium Planner Frontend
+Launch script for Occuno Planner Frontend
 """
 import os
 import sys
@@ -46,12 +46,12 @@ def check_npm():
 
 def check_dependencies():
     """Check if node_modules exists, if not try to install."""
-    frontend_dir = Path("auxilium-frontend")
+    frontend_dir = Path("occuno-frontend")
     node_modules = frontend_dir / "node_modules"
     package_json = frontend_dir / "package.json"
     
     if not package_json.exists():
-        print("❌ package.json not found in auxilium-frontend directory")
+        print("❌ package.json not found in occuno-frontend directory")
         return False
     
     if not node_modules.exists():
@@ -76,13 +76,13 @@ def check_dependencies():
 
 def main():
     """Main function to launch the frontend."""
-    print("🚀 Starting Auxilium Planner Frontend...")
+    print("🚀 Starting Occuno Planner Frontend...")
     print("=" * 50)
     
     # Check if frontend directory exists
-    frontend_dir = Path("auxilium-frontend")
+    frontend_dir = Path("occuno-frontend")
     if not frontend_dir.exists():
-        print("❌ auxilium-frontend directory not found")
+        print("❌ occuno-frontend directory not found")
         print("Please run this script from the project root directory")
         sys.exit(1)
     

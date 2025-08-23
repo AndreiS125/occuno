@@ -2,7 +2,7 @@
 SQLAlchemy database configuration and session management
 
 This module provides SQLAlchemy setup, session management, and database
-initialization for the auxilium_planner application.
+initialization for the occuno_planner application.
 """
 
 from sqlmodel import create_engine, Session, SQLModel
@@ -19,7 +19,7 @@ from .models import UserProfile, Objective, UserAchievement, EarnedCoupon, creat
 logger = get_logger("sqlalchemy_database")
 
 # Database path - use same location as existing SQLite database
-DATABASE_PATH = Path(settings.data_file_path).parent / "auxilium_planner_sqlalchemy.db"
+DATABASE_PATH = Path(settings.data_file_path).parent / "occuno_planner_sqlalchemy.db"
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
 class SQLAlchemyDatabaseManager:

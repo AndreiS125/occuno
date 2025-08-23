@@ -30,7 +30,7 @@ export function TerminologyGuide() {
         <DialogHeader>
           <DialogTitle>Understanding Objective Types</DialogTitle>
           <DialogDescription>
-            Auxilium uses a hierarchical system to organize your goals and tasks
+            Occuno uses a hierarchical system to organize your goals and tasks
           </DialogDescription>
         </DialogHeader>
         

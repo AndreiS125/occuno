@@ -1,4 +1,4 @@
-# Auxilium Complete Setup Guide
+# Occuno Complete Setup Guide
 
 Quick guide to get both backend and frontend running in 5 minutes.
 
@@ -12,7 +12,7 @@ Quick guide to get both backend and frontend running in 5 minutes.
 
 1. Navigate to backend directory:
 ```bash
-cd auxilium_planner
+cd occuno_planner
 ```
 
 2. Create virtual environment:
@@ -42,7 +42,7 @@ Backend will be running at http://localhost:8000
 
 1. Open a new terminal and navigate to frontend:
 ```bash
-cd auxilium-frontend
+cd occuno-frontend
 ```
 
 2. Install dependencies:
@@ -65,7 +65,7 @@ Frontend will be running at http://localhost:3000
 ## Verify Everything Works
 
 1. Open http://localhost:3000 in your browser
-2. You should see the Auxilium dashboard
+2. You should see the Occuno dashboard
 3. Click "AI Assistant" to open the chat
 4. Try: "Help me plan a project to learn Python in 3 months"
 5. The AI will create objectives for you

@@ -196,7 +196,7 @@ async def google_login(request: Request):
     if oauth_dev_mode or missing_google_creds:
         # Create or get a deterministic dev user
         dev_google_user = GoogleUserInfo(
-            id="dev-google-id-auxilium",
+            id="dev-google-id-occuno",
             email="dev@local.test",
             verified_email=True,
             name="Dev User",

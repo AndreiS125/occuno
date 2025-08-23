@@ -1,5 +1,5 @@
 """
-Startup initialization for auxilium_planner
+Startup initialization for occuno_planner
 
 This module initializes the single, unified SQLAlchemy/SQLModel database.
 Legacy SQLite initialization has been removed to prevent dual-DB usage.
@@ -36,7 +36,7 @@ def get_database_status():
     Returns presence/size of the deprecated legacy SQLite file only to assist
     with cleanup. The application always uses the SQLAlchemy database.
     """
-    legacy_sqlite_path = Path("data/auxilium_planner.db")
+    legacy_sqlite_path = Path("data/occuno_planner.db")
     sqlalchemy_db_path = SQLALCHEMY_DB_PATH
 
     status = {

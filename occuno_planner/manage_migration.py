@@ -66,7 +66,7 @@ class MigrationManager:
         
         logger.info(f"\nCurrent Configuration:")
         logger.info(f"  🔄 Using SQLAlchemy: {status['use_sqlalchemy']}")
-        logger.info(f"  🌍 Environment Variable: {os.getenv('AUXILIUM_USE_SQLALCHEMY', 'not set')}")
+        logger.info(f"  🌍 Environment Variable: {os.getenv('OCCUNO_USE_SQLALCHEMY', 'not set')}")
         
         # Show migration recommendations
         if status['sqlite_exists'] and not status['sqlalchemy_exists']:
@@ -117,11 +117,11 @@ class MigrationManager:
         logger.info("🗄️ Switching to SQLite repositories...")
         
         # Set environment variable
-        os.environ['AUXILIUM_USE_SQLALCHEMY'] = 'false'
+        os.environ['OCCUNO_USE_SQLALCHEMY'] = 'false'
         switch_to_sqlite()
         
         logger.info("✅ Switched to SQLite repositories")
-        logger.info("💡 Set environment variable AUXILIUM_USE_SQLALCHEMY=false to persist this setting")
+        logger.info("💡 Set environment variable OCCUNO_USE_SQLALCHEMY=false to persist this setting")
     
     async def switch_to_sqlalchemy(self):
         """Switch to using SQLAlchemy repositories"""
@@ -135,11 +135,11 @@ class MigrationManager:
             return
         
         # Set environment variable
-        os.environ['AUXILIUM_USE_SQLALCHEMY'] = 'true'
+        os.environ['OCCUNO_USE_SQLALCHEMY'] = 'true'
         switch_to_sqlalchemy()
         
         logger.info("✅ Switched to SQLAlchemy repositories")
-        logger.info("💡 Set environment variable AUXILIUM_USE_SQLALCHEMY=true to persist this setting")
+        logger.info("💡 Set environment variable OCCUNO_USE_SQLALCHEMY=true to persist this setting")
     
     def show_help(self):
         """Show help information"""
@@ -161,8 +161,8 @@ class MigrationManager:
         logger.info("  python manage_migration.py test")
         logger.info("")
         logger.info("Environment Variables:")
-        logger.info("  AUXILIUM_USE_SQLALCHEMY=true   - Use SQLAlchemy repositories")
-        logger.info("  AUXILIUM_USE_SQLALCHEMY=false  - Use SQLite repositories (default)")
+        logger.info("  OCCUNO_USE_SQLALCHEMY=true   - Use SQLAlchemy repositories")
+        logger.info("  OCCUNO_USE_SQLALCHEMY=false  - Use SQLite repositories (default)")
 
 async def main():
     """Main function"""

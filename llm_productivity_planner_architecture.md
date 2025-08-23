@@ -327,7 +327,7 @@ This explicit inclusion of tool calls and results in the history is critical for
 ## 9. Proposed Directory Structure
 
 ```
-auxilium_planner/
+occuno_planner/
 ├── main.py                   # FastAPI app definition, startup, LangGraph wiring
 ├── api/
 │   ├── __init__.py

@@ -18,7 +18,7 @@ from api.endpoints import objectives_api, user_api, auth_api, calendar_api
 # Setup logging early
 logger = setup_logging(
     log_level=os.getenv("LOG_LEVEL", "INFO"),
-    log_file=os.getenv("LOG_FILE", "logs/auxilium_planner.log")
+    log_file=os.getenv("LOG_FILE", "logs/occuno_planner.log")
 )
 
 @asynccontextmanager
@@ -140,7 +140,7 @@ app.include_router(
 if __name__ == "__main__":
     main_logger = get_logger("main")
     
-    main_logger.info("🌟 Starting Auxilium server...")
+    main_logger.info("🌟 Starting Occuno server...")
     
     # Run the app with safer development settings
     uvicorn.run(

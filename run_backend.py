@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Launch script for Auxilium Planner Backend
+Launch script for Occuno Planner Backend
 """
 import os
 import sys
@@ -38,13 +38,13 @@ def check_dependencies():
 
 def main():
     """Main function to launch the backend."""
-    print("🚀 Starting Auxilium Planner Backend...")
+    print("🚀 Starting Occuno Planner Backend...")
     print("=" * 50)
     
-    # Change to the auxilium_planner directory
-    backend_dir = Path("auxilium_planner")
+    # Change to the occuno_planner directory
+    backend_dir = Path("occuno_planner")
     if not backend_dir.exists():
-        print("❌ auxilium_planner directory not found")
+        print("❌ occuno_planner directory not found")
         print("Please run this script from the project root directory")
         sys.exit(1)
     
@@ -61,7 +61,7 @@ def main():
     
     print("=" * 50)
     print("🔥 Launching FastAPI server...")
-    print("📊 Logs will be saved to: logs/auxilium_planner.log")
+    print("📊 Logs will be saved to: logs/occuno_planner.log")
     print("🌐 API will be available at: http://localhost:8000")
     print("📚 API docs available at: http://localhost:8000/docs")
     print("=" * 50)

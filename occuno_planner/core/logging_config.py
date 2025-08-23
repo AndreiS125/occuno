@@ -4,7 +4,7 @@ from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
-def setup_logging(log_level: str = "INFO", log_file: str = "logs/auxilium_planner.log"):
+def setup_logging(log_level: str = "INFO", log_file: str = "logs/occuno_planner.log"):
     """Setup comprehensive logging configuration for the application."""
     
     # Create logs directory if it doesn't exist
@@ -51,12 +51,12 @@ def setup_logging(log_level: str = "INFO", log_file: str = "logs/auxilium_planne
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     
     # Application loggers
-    logging.getLogger("auxilium_planner").setLevel(numeric_level)
+    logging.getLogger("occuno_planner").setLevel(numeric_level)
     
     # Log startup message
-    logger = logging.getLogger("auxilium_planner.startup")
+    logger = logging.getLogger("occuno_planner.startup")
     logger.info("=" * 60)
-    logger.info(f"Auxilium Planner starting up at {datetime.now()}")
+    logger.info(f"Occuno Planner starting up at {datetime.now()}")
     logger.info(f"Log level: {log_level}")
     logger.info(f"Log file: {log_file}")
     logger.info("=" * 60)
@@ -65,4 +65,4 @@ def setup_logging(log_level: str = "INFO", log_file: str = "logs/auxilium_planne
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger with the given name."""
-    return logging.getLogger(f"auxilium_planner.{name}") 
+    return logging.getLogger(f"occuno_planner.{name}") 

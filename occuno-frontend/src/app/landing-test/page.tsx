@@ -29,7 +29,7 @@ export default function LandingTestPage() {
         <div className="container mx-auto px-6 py-12">
           <div className="grid md:grid-cols-4 gap-8">
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Auxilium</h3>
+              <h3 className="text-lg font-medium">Occuno</h3>
               <p className="text-sm text-muted-foreground">
                 AI-powered planning that actually works.
               </p>
@@ -60,7 +60,7 @@ export default function LandingTestPage() {
             </div>
           </div>
           <div className="mt-12 pt-8 border-t border-border text-center">
-            <p className="text-xs text-muted-foreground">&copy; 2024 Auxilium. Built for productivity.</p>
+            <p className="text-xs text-muted-foreground">&copy; 2024 Occuno. Built for productivity.</p>
           </div>
         </div>
       </footer>

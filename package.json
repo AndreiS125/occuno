@@ -1,4 +1,5 @@
 {
+  "name": "occuno",
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@tiptap/pm": "^3.0.1",

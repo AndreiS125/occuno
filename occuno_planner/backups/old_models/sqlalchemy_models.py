@@ -1,5 +1,5 @@
 """
-SQLAlchemy models for auxilium_planner
+SQLAlchemy models for occuno_planner
 
 These models mirror the existing SQLite schema while providing
 proper ORM capabilities and maintaining API compatibility.

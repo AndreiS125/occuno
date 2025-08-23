@@ -6,7 +6,7 @@ from pydantic import Field, validator
 
 class Settings(BaseSettings):
     # Application settings
-    app_name: str = "Auxilium Productivity Planner"
+    app_name: str = "Occuno Productivity Planner"
     app_version: str = "1.0.0"
     debug: bool = True
     
