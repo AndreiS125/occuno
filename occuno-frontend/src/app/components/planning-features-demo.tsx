@@ -885,7 +885,7 @@ export default function PlanningFeaturesDemo({ className }: PlanningFeaturesDemo
                 Planning Tools That
               </span>
               <br />
-              <span className="text-primary font-medium">
+              <span className="text-aura-primary font-medium">
                 Actually Work
               </span>
             </h2>

@@ -212,17 +212,17 @@ export default function CTASection({ className }: CTASectionProps) {
               <GlassCard variant="glow" className="bg-destructive/10 border-destructive/30">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <AlertTriangle className="w-8 h-8 text-destructive animate-pulse" />
+                    <AlertTriangle className="w-8 h-8 text-aura-warm animate-pulse" />
                     <div>
-                      <h3 className="text-lg font-bold text-destructive">Limited Time: Beta Access</h3>
-                      <p className="text-sm text-destructive/80">
+                      <h3 className="text-lg font-bold text-aura-warm">Limited Time: Beta Access</h3>
+                      <p className="text-sm text-muted-foreground">
                         Early access pricing expires soon. Lock in your rate now.
                       </p>
                     </div>
                   </div>
                   <div className="urgency-timer text-center">
-                    <div className="text-2xl font-bold text-destructive">{formatTime(urgencyTimer)}</div>
-                    <div className="text-xs text-destructive/80">until price increase</div>
+                    <div className="text-2xl font-bold text-aura-warm">{formatTime(urgencyTimer)}</div>
+                    <div className="text-xs text-muted-foreground">until price increase</div>
                   </div>
                 </div>
               </GlassCard>
@@ -237,7 +237,7 @@ export default function CTASection({ className }: CTASectionProps) {
               initial={{ opacity: 0, scale: 0.8 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
-              className="inline-flex items-center space-x-2 bg-primary/10 border border-primary/20 text-primary px-6 py-3 rounded-full text-sm font-medium"
+              className="inline-flex items-center space-x-2 bg-primary/10 border border-primary/20 text-aura-accent px-6 py-3 rounded-full text-sm font-medium"
             >
               <Rocket className="w-4 h-4" />
               <span>Your New Life Starts With One Click</span>
@@ -247,7 +247,7 @@ export default function CTASection({ className }: CTASectionProps) {
               <h2 className="text-4xl md:text-7xl font-bold leading-tight">
                 <span className="text-foreground">Stop Letting</span>
                 <br />
-                <span className="text-gradient bg-gradient-to-r from-destructive via-orange-500 to-primary bg-clip-text text-transparent">
+                <span className="text-aura-warm">
                   Planning Paralysis
                 </span>
                 <br />
@@ -255,8 +255,8 @@ export default function CTASection({ className }: CTASectionProps) {
               </h2>
               
               <p className="text-xl md:text-2xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
-                Every week you spend in planning chaos is a week your <span className="text-primary font-semibold">AI-powered competitors</span> are 
-                building their empire. The gap isn't shrinking. <span className="text-secondary font-semibold">It's time to fight back.</span>
+                Every week you spend in planning chaos is a week your <span className="text-aura-primary font-semibold">AI-powered competitors</span> are 
+                building their empire. The gap isn't shrinking. <span className="text-aura-accent font-semibold">It's time to fight back.</span>
               </p>
             </div>
 
@@ -275,7 +275,7 @@ export default function CTASection({ className }: CTASectionProps) {
                 <Button 
                   variant="outline" 
                   size="lg" 
-                  className="border-primary/30 text-primary hover:bg-primary/10 px-8 py-6 text-lg"
+                  className="border-primary/30 text-aura-primary hover:bg-primary/10 px-8 py-6 text-lg"
                 >
                   <Crown className="w-5 h-5 mr-2" />
                   Try Pro Free
@@ -312,7 +312,7 @@ export default function CTASection({ className }: CTASectionProps) {
                     className="metric-card text-center group"
                   >
                     <div className="space-y-3">
-                      <metric.icon className="w-8 h-8 mx-auto text-primary group-hover:scale-110 transition-transform" />
+                      <metric.icon className="w-8 h-8 mx-auto text-aura-primary group-hover:scale-110 transition-transform" />
                       <div className="text-3xl font-bold text-gradient bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                         {metric.metric}
                       </div>
@@ -359,7 +359,7 @@ export default function CTASection({ className }: CTASectionProps) {
               <div className="grid lg:grid-cols-2 gap-12 items-center">
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <h3 className="text-3xl font-bold text-destructive">The Cost of Waiting</h3>
+                    <h3 className="text-3xl font-bold text-aura-warm">The Cost of Waiting</h3>
                     <p className="text-muted-foreground leading-relaxed">
                       Every day you delay is another day of lost productivity, missed opportunities, 
                       and watching others succeed with AI while you struggle alone.
@@ -373,8 +373,8 @@ export default function CTASection({ className }: CTASectionProps) {
                         className="pain-point flex items-center space-x-3 p-3 bg-destructive/10 rounded-lg"
                         whileHover={{ x: 5 }}
                       >
-                        <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0" />
-                        <span className="text-sm text-destructive/90">{point}</span>
+                        <AlertTriangle className="w-5 h-5 text-aura-warm flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">{point}</span>
                       </motion.div>
                     ))}
                   </div>
@@ -455,7 +455,7 @@ export default function CTASection({ className }: CTASectionProps) {
                   <Button 
                     variant="outline" 
                     size="lg" 
-                    className="border-primary/30 text-primary hover:bg-primary/10 px-8 py-5 text-lg"
+                    className="border-primary/30 text-aura-primary hover:bg-primary/10 px-8 py-5 text-lg"
                   >
                     <Users className="w-5 h-5 mr-2" />
                     Talk to an Expert

@@ -138,7 +138,7 @@ export default function PricingSection({ className }: PricingSectionProps) {
           <h2 className="text-4xl lg:text-6xl font-light leading-tight">
             <span className="text-foreground">Stop Competing With</span>
             <br />
-            <span className="text-primary font-medium">AI-Powered Teams</span>
+            <span className="text-aura-primary font-medium">AI-Powered Teams</span>
           </h2>
 
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
@@ -369,7 +369,7 @@ export default function PricingSection({ className }: PricingSectionProps) {
         <div className="text-center space-y-8 mt-16">
           <div className="space-y-4">
             <h3 className="text-2xl lg:text-3xl font-semibold">
-              Ready to <span className="text-primary">10x Your Planning?</span>
+              Ready to <span className="text-aura-primary">10x Your Planning?</span>
             </h3>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               Join thousands who've already made the switch to AI-powered productivity.

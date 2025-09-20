@@ -12,46 +12,28 @@ import FinalCTA from "./components/final-cta";
 export default function LandingPage() {
   return (
     <div className="relative min-h-screen bg-background overflow-hidden">
-      {/* Prominent Background Grid Pattern */}
-      <div className="absolute inset-0 opacity-40">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `
-            linear-gradient(90deg, rgba(59, 130, 246, 0.08) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(59, 130, 246, 0.08) 1px, transparent 1px)
-          `,
-          backgroundSize: '50px 50px'
-        }} />
-      </div>
+      {/* Premium Aurora Background */}
+      <div className="absolute inset-0 aurora-bg" />
 
-      {/* Diagonal Lines */}
-      <div className="absolute inset-0 opacity-15">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `
-            repeating-linear-gradient(
-              45deg,
-              transparent,
-              transparent 45px,
-              rgba(59, 130, 246, 0.12) 45px,
-              rgba(59, 130, 246, 0.12) 47px
-            )
-          `
-        }} />
-      </div>
+      {/* Soft noise for texture */}
+      <div className="absolute inset-0 noise-overlay pointer-events-none" />
 
-      {/* Floating Dots Pattern */}
-      <div className="absolute inset-0 opacity-25">
-        {Array.from({ length: 60 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-0.5 h-0.5 bg-primary rounded-full animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 4}s`,
-              animationDuration: `${3 + Math.random() * 2}s`
-            }}
-          />
-        ))}
+      {/* Occuno orbital motif (control + precision) */}
+      <div className="pointer-events-none absolute inset-0">
+        {/* Concentric control rings */}
+        <div className="orbital-ring size-[1200px] -left-1/3 -top-1/4 rotate-12" />
+        <div className="orbital-ring size-[900px] -right-1/4 -top-1/3 -rotate-6" />
+        <div className="orbital-ring size-[700px] -left-16 bottom-[-280px] rotate-45" />
+        {/* Complex paint-spill gradient shapes */}
+        <div className="paint-spill-1 w-[680px] h-[480px] left-[5%] top-[8%]" />
+        <div className="paint-spill-2 w-[520px] h-[620px] right-[8%] top-[15%]" />
+        <div className="paint-spill-3 w-[740px] h-[560px] left-[60%] bottom-[-180px]" />
+        <div className="paint-spill-4 w-[420px] h-[380px] left-[15%] bottom-[20%]" />
+        {/* Additional paint-spill shapes */}
+        <div className="paint-spill-1 w-[380px] h-[320px] right-[25%] top-[35%]" />
+        <div className="paint-spill-2 w-[460px] h-[380px] left-[35%] top-[55%]" />
+        <div className="paint-spill-3 w-[320px] h-[280px] right-[15%] bottom-[30%]" />
+        <div className="paint-spill-4 w-[540px] h-[420px] left-[45%] top-[25%]" />
       </div>
 
       {/* Main Content */}
@@ -67,7 +49,7 @@ export default function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-background">
+      <footer className="relative z-20 border-t border-border bg-background">
         <div className="container mx-auto px-6 py-12">
           <div className="grid md:grid-cols-4 gap-8">
             <div className="space-y-4">

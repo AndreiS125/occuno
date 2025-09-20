@@ -129,7 +129,7 @@ export default function FeaturesSection({ className }: FeaturesSectionProps) {
               Everything You Need
             </span>
             <br />
-            <span className="text-primary font-medium">
+            <span className="text-aura-primary font-medium">
               In One Place
             </span>
           </h2>

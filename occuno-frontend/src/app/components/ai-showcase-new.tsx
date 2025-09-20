@@ -89,7 +89,7 @@ export default function AiShowcase({ className }: AiShowcaseProps) {
         {/* Section Header */}
         <div className="text-center space-y-6 mb-16">
           <h2 className="text-4xl lg:text-6xl font-light leading-tight">
-            <span className="text-primary font-medium">
+            <span className="text-aura-primary font-medium">
               Three Levels
             </span>
             <br />
@@ -175,7 +175,7 @@ export default function AiShowcase({ className }: AiShowcaseProps) {
                       exit={{ opacity: 0 }}
                       className="flex items-center space-x-2"
                     >
-                      <Brain className="w-4 h-4 text-primary animate-pulse" />
+                      <Brain className="w-4 h-4 text-aura-primary animate-pulse" />
                       <div>
                         <p className="text-xs font-medium">Processing...</p>
                         <p className="text-xs text-muted-foreground">
@@ -207,7 +207,7 @@ export default function AiShowcase({ className }: AiShowcaseProps) {
             {/* Output */}
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <Target className="w-3 h-3 text-primary" />
+                <Target className="w-3 h-3 text-aura-primary" />
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Output</label>
               </div>
               <div className="space-y-2 max-h-[250px] overflow-hidden">
@@ -228,7 +228,7 @@ export default function AiShowcase({ className }: AiShowcaseProps) {
                         transition={{ delay: index * 0.05 }}
                         className="bg-primary/5 border border-primary/20 rounded p-2 flex items-center space-x-2"
                       >
-                        <div className="w-1 h-1 bg-primary rounded-full flex-shrink-0" />
+                        <div className="w-1 h-1 bg-aura-primary rounded-full flex-shrink-0" />
                         <span className="text-xs">{step}</span>
                       </motion.div>
                     ))}

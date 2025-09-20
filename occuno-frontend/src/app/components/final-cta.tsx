@@ -23,7 +23,7 @@ export default function FinalCTA({ className }: FinalCTAProps) {
             <h2 className="text-4xl lg:text-6xl font-light leading-tight">
               <span className="text-foreground">Ready to Stop</span>
               <br />
-              <span className="text-primary font-medium">Planning Forever?</span>
+              <span className="text-aura-primary font-medium">Planning Forever?</span>
             </h2>
             
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
