@@ -1,52 +1,17 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
-import { Eye, EyeOff, Zap, ArrowRight, Brain, Sparkles, Target, Clock } from "lucide-react";
+import { Zap, ArrowRight, Brain, Sparkles, Target, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { authApi } from "@/lib/api";
-import toast from "react-hot-toast";
 
 function LoginContent() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-  });
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { loginWithGoogle } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-
-    try {
-      setIsLoading(true);
-      await authApi.login({
-        username: formData.username,
-        password: formData.password,
-      });
-      toast.success("Welcome back! 🎉");
-      const redirect = searchParams.get('redirect') || '/dashboard';
-      router.push(redirect);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Login failed. Please check your credentials.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 relative overflow-hidden">
@@ -193,23 +158,11 @@ function LoginContent() {
                   </p>
                 </div>
 
-                {/* Google OAuth Button */}
+                {/* Google OAuth Button (only login option) */}
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={async () => {
-                    try {
-                      const response = await fetch('http://localhost:8000/api/v1/auth/google', {
-                        credentials: 'include'  // 🔑 Send session cookies!
-                      });
-                      const data = await response.json();
-                      if (data.auth_url) {
-                        window.location.href = data.auth_url;
-                      }
-                    } catch (error) {
-                      toast.error('Failed to initiate Google OAuth');
-                    }
-                  }}
+                  onClick={() => { loginWithGoogle(); }}
                   className="w-full flex items-center justify-center space-x-2 py-3 mb-6 bg-white/50 hover:bg-white/70 border-gray-200 dark:border-gray-600"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -232,95 +185,6 @@ function LoginContent() {
                   </svg>
                   <span>Continue with Google</span>
                 </Button>
-
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white/80 dark:bg-gray-800/80 px-2 text-gray-500">Or</span>
-                  </div>
-                </div>
-
-                {/* Username/Password Form */}
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  {/* Username */}
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Username
-                    </Label>
-                    <Input
-                      id="username"
-                      name="username"
-                      type="text"
-                      required
-                      value={formData.username}
-                      onChange={handleChange}
-                      className="bg-white/60 dark:bg-gray-700/60 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                      placeholder="Enter your username"
-                    />
-                  </div>
-
-                  {/* Password */}
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="current-password"
-                        required
-                        value={formData.password}
-                        onChange={handleChange}
-                        className="bg-white/60 dark:bg-gray-700/60 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 pr-10"
-                        placeholder="Enter your password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Forgot Password Link */}
-                  <div className="text-right">
-                    <Link 
-                      href="/forgot-password" 
-                      className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                    >
-                      Forgot your password?
-                    </Link>
-                  </div>
-
-                  {/* Submit Button */}
-                  <Button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 text-base font-medium shadow-lg"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                        Signing In...
-                      </>
-                    ) : (
-                      <>
-                        Sign In
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </>
-                    )}
-                  </Button>
-                </form>
 
                 <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
                   <div className="text-center">

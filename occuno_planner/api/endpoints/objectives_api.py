@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from core.models import Objective, ObjectiveType, ObjectiveStatus, EnergyLevel, RecurringInfo, UserProfile
 from repositories.repository_factory import get_objective_repository
 from services.gamification_service import GamificationService
-from api.endpoints.auth_api import get_current_user_dependency
+from auth.users import current_active_user
 
 router = APIRouter(tags=["objectives"])
 
@@ -90,7 +90,7 @@ class TaskCreateRequest(ObjectiveCreateRequest):
 
 @router.get("/", response_model=List[dict])
 def get_all_objectives(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     status: Optional[str] = None,
     parent_id: Optional[UUID] = None,
     calendar_ids: Optional[str] = None,  # Comma-separated calendar IDs for filtering
@@ -118,7 +118,7 @@ def get_all_objectives(
 
 @router.get("/root", response_model=List[dict])
 def get_root_objectives(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Get all root objectives (no parent) for the current user."""
@@ -127,7 +127,7 @@ def get_root_objectives(
 
 @router.get("/upcoming", response_model=List[dict])
 def get_upcoming_tasks(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     days: int = 7,
     objective_repo = Depends(get_objective_repo)
 ):
@@ -138,7 +138,7 @@ def get_upcoming_tasks(
 @router.get("/search")
 def search_objectives(
     query: str,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Search objectives by title or description for the current user."""
@@ -147,7 +147,7 @@ def search_objectives(
 
 @router.get("/stats")
 def get_objectives_statistics(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Get statistics about objectives for the current user."""
@@ -156,7 +156,7 @@ def get_objectives_statistics(
 @router.get("/{objective_id}", response_model=dict)
 def get_objective(
     objective_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Get a specific objective by ID for the current user."""
@@ -177,7 +177,7 @@ def get_objective_children(
 @router.post("/", response_model=dict)
 def create_objective(
     request: ObjectiveCreateRequest,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Create a new objective for the current user."""
@@ -244,7 +244,7 @@ def create_objective(
 @router.post("/task", response_model=dict)
 def create_task(
     request: TaskCreateRequest,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Create a new task (convenience endpoint)."""
@@ -257,7 +257,7 @@ def update_objective(
     objective_id: UUID,
     request: ObjectiveUpdateRequest,
     include_gamification: bool = False,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Update an existing objective for the current user."""
@@ -421,7 +421,7 @@ def update_objective(
 @router.post("/{objective_id}/complete", response_model=dict)
 def complete_objective(
     objective_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
@@ -460,7 +460,7 @@ def complete_objective(
 @router.delete("/{objective_id}")
 def delete_objective(
     objective_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     objective_repo = Depends(get_objective_repo)
 ):
     """Delete an objective and all its children for the current user."""

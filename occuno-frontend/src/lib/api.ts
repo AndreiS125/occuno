@@ -65,11 +65,11 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Try to refresh the token
-        const refreshResponse = await api.post('/auth/refresh');
+        // No refresh endpoint. Probe current session via users/me.
+        const refreshResponse = await api.get('/users/me');
         
         if (refreshResponse.status === 200) {
-          // Token refreshed successfully, process queued requests
+          // Auth is still valid, process queued requests
           processQueue(null);
           
           // Retry the original request
@@ -296,7 +296,6 @@ export const userApi = {
 // Auth API
 export const authApi = {
   register: async (data: {
-    username: string;
     email: string;
     password: string;
     full_name?: string;
@@ -309,17 +308,26 @@ export const authApi = {
     username: string;
     password: string;
   }) => {
-    const response = await api.post("/auth/login", data);
+    // FastAPI-Users expects form data for login
+    const formData = new FormData();
+    formData.append('username', data.username);
+    formData.append('password', data.password);
+    
+    const response = await api.post("/auth/jwt/login", formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
   logout: async () => {
-    const response = await api.post("/auth/logout");
+    const response = await api.post("/auth/jwt/logout");
     return response.data;
   },
 
   getCurrentUser: async () => {
-    const response = await api.get("/auth/me");
+    const response = await api.get("/users/me");
     return response.data;
   },
 };

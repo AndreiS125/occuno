@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 
 interface User {
   id: string;
-  username: string;
   email: string;
   full_name: string;
   profile_picture_url?: string;
@@ -28,12 +27,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Normalize API base URL so we don't double-append "/api/v1"
+// Backend base URLs
+// API_BASE_URL must end with /api/v1 for all app routes and auth endpoints (JWT/register/logout, Google OAuth).
 const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE_URL = (() => {
-  const trimmed = RAW_API_URL.replace(/\/+$/, '');
-  return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
-})();
+const RAW_TRIMMED = RAW_API_URL.replace(/\/+$/, '');
+const API_BASE_URL = RAW_TRIMMED.endsWith('/api/v1') ? RAW_TRIMMED : `${RAW_TRIMMED}/api/v1`;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -75,15 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loadUser = async () => {
       try {
         // Direct check using cookies; avoid depending on apiCall to keep effect stable
-        let res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: 'include' });
+        let res = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
         if (!res.ok) {
-          const refreshed = await fetch(`${API_BASE_URL}/auth/refresh`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-          if (refreshed.ok) {
-            res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: 'include' });
-          }
+          // No explicit refresh endpoint; simply consider not authenticated
         }
         if (res.ok) {
           const userData = await res.json();
@@ -100,11 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    // FastAPI-Users expects form data for login
+    const formData = new FormData();
+    formData.append('username', email); // FastAPI-Users uses 'username' field
+    formData.append('password', password);
+
+    const response = await fetch(`${API_BASE_URL}/auth/jwt/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, password }),
+      body: formData,
     });
 
     if (!response.ok) {
@@ -112,8 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(error.detail || 'Login failed');
     }
 
-    const data = await response.json();
-    setUser(data.user);
+    // After successful login, get user data
+    const userResponse = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
+    if (userResponse.ok) {
+      const userData = await userResponse.json();
+      setUser(userData);
+    }
+    
     router.push('/dashboard');
   };
 
@@ -122,7 +123,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, password, full_name: fullName }),
+      body: JSON.stringify({ 
+        email, 
+        password, 
+        full_name: fullName 
+      }),
     });
 
     if (!response.ok) {
@@ -130,29 +135,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(error.detail || 'Registration failed');
     }
 
-    const data = await response.json();
-    setUser(data.user);
+    // After successful registration, get user data
+    const userResponse = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
+    if (userResponse.ok) {
+      const userData = await userResponse.json();
+      setUser(userData);
+    }
+    
     router.push('/dashboard');
   };
 
   const loginWithGoogle = async () => {
-    // Get Google OAuth URL and set session cookie for CSRF state
-    const response = await fetch(`${API_BASE_URL}/auth/google`, {
-      credentials: 'include',
-    });
-    if (!response.ok) {
-      throw new Error('Failed to initiate Google OAuth');
+    try {
+      // Same-tab flow: request an authorization_url with a frontend redirect target,
+      // then navigate current window to Google's consent screen.
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const response = await fetch(
+        `${API_BASE_URL}/auth/google/authorize?redirect_url=${encodeURIComponent(redirectUrl)}`,
+        { credentials: 'include' }
+      );
+      if (!response.ok) throw new Error('Failed to get Google OAuth URL');
+      const data = await response.json();
+      if (!data.authorization_url) throw new Error('No authorization URL received');
+      // Navigate in the same tab
+      window.location.assign(data.authorization_url);
+    } catch (error) {
+      console.error('Google OAuth failed:', error);
+      throw error;
     }
-    const data = await response.json();
-    // Redirect to Google OAuth consent screen
-    window.location.href = data.auth_url;
   };
 
   const refreshToken = async (): Promise<boolean> => {
     try {
-      // No body needed; backend reads refresh token from HttpOnly cookie
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
+      // FastAPI-Users handles token refresh automatically
+      // For now, we'll just try to get the current user to check if auth is still valid
+      const response = await fetch(`${API_BASE_URL}/users/me`, {
         credentials: 'include',
       });
 
@@ -167,8 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = useCallback(() => {
-    // Ask backend to clear auth cookies
-    fetch(`${API_BASE_URL}/auth/logout`, {
+    // Use FastAPI-Users logout endpoint
+    fetch(`${API_BASE_URL}/auth/jwt/logout`, {
       method: 'POST',
       credentials: 'include',
     }).finally(() => {

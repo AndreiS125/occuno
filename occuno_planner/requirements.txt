@@ -18,13 +18,10 @@ pytest==8.1.1
 pytest-asyncio==0.23.5
 httpx==0.28.0
 
-# Authentication and OAuth
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-google-auth==2.28.1
-google-auth-oauthlib==1.2.0
-google-auth-httplib2==0.2.0
-itsdangerous==2.1.2
+# Authentication and OAuth - FastAPI-Users
+fastapi-users[sqlalchemy]==13.0.0
+fastapi-users[oauth]==13.0.0
+httpx-oauth==0.15.1
 
 # Utilities
 uuid==1.30

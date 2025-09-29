@@ -5,7 +5,7 @@ from uuid import UUID
 
 from repositories.repository_factory import get_user_profile_repository
 from services.gamification_service import GamificationService
-from api.endpoints.auth_api import get_current_user_dependency
+from auth.users import current_active_user
 from core.models import UserProfile
 
 router = APIRouter(tags=["user"])
@@ -20,7 +20,6 @@ def get_gamification_service():
 # Request/Response models
 class UserProfileResponse(BaseModel):
     id: str
-    username: str
     overall_score: int
     current_streak_days: int
     achievements_count: int
@@ -30,6 +29,7 @@ class UserProfileResponse(BaseModel):
     preferences: Optional[Dict[str, Any]] = None
 
 class UpdatePreferencesRequest(BaseModel):
+    full_name: Optional[str] = None
     name: Optional[str] = None
     email: Optional[str] = None
     theme: Optional[str] = None
@@ -99,7 +99,7 @@ class EnhancedGamificationStatsResponse(BaseModel):
 
 @router.get("/profile", response_model=UserProfileResponse)
 def get_user_profile(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get the current user's profile."""
@@ -109,15 +109,14 @@ def get_user_profile(
     
     # Extract preferences if they exist
     preferences = profile.preferred_work_hours or {}
-    
+
     return UserProfileResponse(
         id=str(profile.id),
-        username=profile.username,
         overall_score=profile.overall_score,
         current_streak_days=profile.current_streak_days,
         achievements_count=len(profile.achievements) if profile.achievements else 0,
         preferred_work_hours=profile.preferred_work_hours,
-        name=preferences.get("name", profile.full_name or profile.username),
+        name=profile.full_name or preferences.get("name", (profile.email.split("@")[0] if profile.email else "")),
         email=preferences.get("email", profile.email or ""),
         preferences=preferences
     )
@@ -125,7 +124,7 @@ def get_user_profile(
 @router.put("/preferences")
 def update_preferences(
     request: UpdatePreferencesRequest,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Update user preferences."""
@@ -134,24 +133,45 @@ def update_preferences(
         raise HTTPException(status_code=404, detail="User profile not found")
     
     # Get existing preferences or create new dict
-    preferences = profile.preferred_work_hours or {}
-    
-    # Update preferences with new values
+    preferences = dict(profile.preferred_work_hours or {})
+
     updates_dict = request.dict(exclude_unset=True)
-    
-    # Store all settings in the preferred_work_hours JSON field
+
+    # Persist identity fields directly on the profile (full_name)
+    full_name_val = updates_dict.get("full_name", updates_dict.get("name"))
+    if full_name_val is not None:
+        profile.full_name = full_name_val.strip() or None
+    # Optionally allow email change via preferences (kept off by default for safety)
+    # If needed later, uncomment the next two lines and add validation for uniqueness/verification
+    # if "email" in updates_dict and updates_dict["email"]:
+    #     profile.email = updates_dict["email"].strip()
+
+    # Only store true preference keys in JSON blob
+    preference_keys = {
+        "theme",
+        "notifications_enabled",
+        "daily_goal_tasks",
+        "working_hours_start",
+        "working_hours_end",
+        "timezone",
+        # Keep a copy of name/email in preferences for backward compatibility if present
+        "name",
+        "email",
+        "preferred_work_hours",  # nested structure passthrough if ever used
+    }
     for key, value in updates_dict.items():
-        preferences[key] = value
-    
-    # Update the profile with new preferences
+        if key in preference_keys:
+            preferences[key] = value
+
+    # Update the profile and persist
     profile.preferred_work_hours = preferences
     profile = user_repo.update(profile)
-    
+
     return {"success": True, "message": "Preferences updated", "preferences": preferences}
 
 @router.get("/gamification/stats", response_model=EnhancedGamificationStatsResponse)
 def get_enhanced_gamification_stats(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get comprehensive gamification statistics with coupon system."""
@@ -247,7 +267,7 @@ def get_enhanced_gamification_stats(
 
 @router.get("/luck-status")
 def get_luck_status(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
@@ -284,7 +304,7 @@ def get_luck_status(
 
 @router.get("/reward-config")
 def get_reward_configuration(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get user's custom reward configuration."""
@@ -345,7 +365,7 @@ def get_reward_configuration(
 
 @router.get("/gamification/daily-status")
 def get_daily_status(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get user's daily gamification status."""
@@ -382,7 +402,7 @@ def get_daily_status(
 
 @router.get("/coupons")
 def get_available_coupons(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get all available (unused) coupons for the user."""
@@ -414,7 +434,7 @@ def get_available_coupons(
 @router.post("/coupons/{coupon_id}/use")
 def use_coupon(
     coupon_id: str,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Use a specific coupon."""
@@ -446,7 +466,7 @@ def use_coupon(
 
 @router.get("/coupons/definitions")
 def get_coupon_definitions(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get coupon type definitions."""
@@ -478,7 +498,7 @@ def get_coupon_definitions(
 
 @router.post("/gamification/mystery-box")
 def open_mystery_box(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Open a mystery box."""
@@ -490,7 +510,7 @@ def open_mystery_box(
 
 @router.get("/gamification/weekly-challenge")
 def get_weekly_challenge(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     user_repo = Depends(get_user_repo)
 ):
     """Get weekly challenge progress."""
@@ -510,7 +530,7 @@ def get_weekly_challenge(
 
 @router.post("/gamification/daily-bonus")
 def claim_daily_bonus(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Claim daily bonus."""
@@ -522,7 +542,7 @@ def claim_daily_bonus(
 
 @router.post("/gamification/check-streak")
 def check_and_update_streak(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Manually check and update streak status."""
@@ -541,7 +561,7 @@ def check_and_update_streak(
 # Authenticated: achievement definitions are user-scoped
 @router.get("/gamification/achievements")
 def get_achievement_definitions(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Get all available achievement definitions for the authenticated user."""

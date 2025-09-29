@@ -274,14 +274,14 @@ function Navigation({ calendarViewMode, onCalendarViewChange }: NavigationProps)
                         className="flex items-center px-2 py-2 rounded-xl hover:bg-muted/50 transition-all duration-200"
                       >
                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-foreground font-medium text-sm">
-                          {user?.username?.charAt(0).toUpperCase() || user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                          {(user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase()}
                         </div>
                       </button>
 
                       {userMenuOpen && (
                         <div className="absolute right-0 mt-2 w-48 bg-background border rounded-xl shadow-lg py-2 z-50">
                           <div className="px-4 py-2 border-b border-border/20">
-                            <p className="font-medium text-sm">{user?.full_name || user?.username}</p>
+                            <p className="font-medium text-sm">{user?.full_name || user?.email}</p>
                             <p className="text-xs text-muted-foreground">{user?.email}</p>
                           </div>
                           <Link

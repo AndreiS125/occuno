@@ -8,9 +8,10 @@ initialization for the occuno_planner application.
 from sqlmodel import create_engine, Session, SQLModel
 from sqlalchemy import event
 from sqlalchemy.pool import NullPool
-from contextlib import contextmanager
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from contextlib import contextmanager, asynccontextmanager
 from pathlib import Path
-from typing import Generator
+from typing import Generator, AsyncGenerator
 
 from .config import settings
 from .logging_config import get_logger
@@ -21,6 +22,7 @@ logger = get_logger("sqlalchemy_database")
 # Database path - use same location as existing SQLite database
 DATABASE_PATH = Path(settings.data_file_path).parent / "occuno_planner_sqlalchemy.db"
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+ASYNC_DATABASE_URL = f"sqlite+aiosqlite:///{DATABASE_PATH}"
 
 class SQLAlchemyDatabaseManager:
     """SQLAlchemy database manager with session handling"""
@@ -272,3 +274,13 @@ def initialize_sqlalchemy_database():
 def close_sqlalchemy_database():
     """Close the SQLAlchemy database - call this on shutdown"""
     sqlalchemy_db_manager.close()
+
+# Async database support for FastAPI-Users
+async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
+
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """Get an async database session for FastAPI-Users"""
+    # Avoid expiring attributes on commit to prevent implicit lazy-loads
+    # in async contexts (which can raise MissingGreenlet).
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
+        yield session

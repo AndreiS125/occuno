@@ -16,31 +16,17 @@ export default function OAuthCallbackPage() {
   useEffect(() => {
     const complete = async () => {
       try {
-        // Clean any URL fragment if present (backend shouldn't send tokens in hash anymore)
+        // Clean any URL fragment if present
         if (typeof window !== "undefined" && window.location.hash) {
           window.history.replaceState(null, "", window.location.pathname);
         }
 
-        // 1) Try to verify session using cookie-based access token
-        let res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: "include" });
+        // Verify session using cookie set by backend during OAuth callback
+        const res = await fetch(`${API_BASE_URL}/users/me`, { credentials: "include" });
         if (res.ok) {
           setMessage("Signed in! Redirecting...");
           window.location.replace("/dashboard");
           return;
-        }
-
-        // 2) Try to refresh access token via refresh cookie, then retry /me
-        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (refreshRes.ok) {
-          res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: "include" });
-          if (res.ok) {
-            setMessage("Signed in! Redirecting...");
-            window.location.replace("/dashboard");
-            return;
-          }
         }
 
         setMessage("Sign-in failed. Redirecting to login...");

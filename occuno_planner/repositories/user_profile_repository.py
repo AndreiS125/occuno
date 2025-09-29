@@ -51,32 +51,6 @@ class UserProfileRepository:
             self.logger.error(f"❌ Error getting user profile {user_id}: {e}")
             raise
     
-    def get_by_username(self, username: str) -> Optional[UserProfile]:
-        """Get user profile by username with relationships"""
-        try:
-            with sqlalchemy_db_manager.get_session() as session:
-                statement = (
-                    select(UserProfile)
-                    .options(
-                        selectinload(UserProfile.achievements),
-                        selectinload(UserProfile.earned_coupons),
-                        selectinload(UserProfile.coupon_definitions),
-                        selectinload(UserProfile.achievement_definitions)
-                    )
-                    .where(UserProfile.username == username)
-                )
-                result = session.exec(statement).first()
-                
-                if result:
-                    self.logger.debug(f"✅ Found user profile by username: {username}")
-                else:
-                    self.logger.debug(f"❌ User profile not found by username: {username}")
-                
-                return result
-                
-        except Exception as e:
-            self.logger.error(f"❌ Error getting user profile by username {username}: {e}")
-            raise
     
     def get_by_email(self, email: str) -> Optional[UserProfile]:
         """Get user profile by email"""

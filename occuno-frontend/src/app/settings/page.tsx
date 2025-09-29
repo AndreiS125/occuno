@@ -170,7 +170,7 @@ export default function SettingsPage() {
         
         // Map profile data to settings format (using defaults for now)
         setSettings({
-          name: (userProfile as any).username || "",
+          name: (userProfile as any).name || (userProfile as any).full_name || ((userProfile as any).email ? (userProfile as any).email.split('@')[0] : ""),
           email: (userProfile as any).email || "",
           theme: (userProfile as any).theme || "system",
           notifications_enabled: (userProfile as any).notifications_enabled !== false,

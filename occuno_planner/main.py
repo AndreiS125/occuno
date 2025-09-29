@@ -5,6 +5,8 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi import Request
+from starlette.responses import RedirectResponse
 from core.config import settings
 from core.logging_config import setup_logging, get_logger
 from core.sqlalchemy_database import DATABASE_PATH as SQLALCHEMY_DB_PATH
@@ -13,7 +15,8 @@ from core.sqlalchemy_database import DATABASE_PATH as SQLALCHEMY_DB_PATH
 # Load environment variables
 load_dotenv()
 
-from api.endpoints import objectives_api, user_api, auth_api, calendar_api
+from api.endpoints import objectives_api, user_api, calendar_api
+from auth.routes import api_router as auth_api_router
 
 # Setup logging early
 logger = setup_logging(
@@ -109,11 +112,33 @@ async def health_check():
         "database": {"path": str(SQLALCHEMY_DB_PATH), "exists": exists, "size": size},
     }
 
-# Include API routers
+# Redirect OAuth callback to frontend after cookies are set
+@app.middleware("http")
+async def oauth_callback_redirect_middleware(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        callback_path = f"{settings.api_prefix}/auth/google/callback"
+        if request.url.path == callback_path and response.status_code in (200, 204):
+            frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            redirect = RedirectResponse(url=f"{frontend_base}/auth/callback", status_code=302)
+            # Preserve any Set-Cookie headers from the auth response
+            try:
+                set_cookie_headers = [v for (k, v) in getattr(response, "raw_headers", []) if k.decode().lower() == "set-cookie"]
+                for v in set_cookie_headers:
+                    redirect.headers.append("set-cookie", v.decode())
+            except Exception:
+                pass
+            return redirect
+    except Exception:
+        # If anything goes wrong, just return the original response
+        return response
+    return response
+
+# Include API routers under the unified API prefix (e.g., /api/v1/auth/*, /api/v1/users)
 app.include_router(
-    auth_api.router,
+    auth_api_router,
     prefix=f"{settings.api_prefix}",
-    tags=["authentication"]
+    tags=["authentication"],
 )
 
 app.include_router(

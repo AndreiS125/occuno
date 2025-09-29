@@ -6,7 +6,7 @@ from datetime import datetime
 
 from core.models import Calendar, UserProfile
 from repositories.repository_factory import get_calendar_repository
-from api.endpoints.auth_api import get_current_user_dependency
+from auth.users import current_active_user
 
 router = APIRouter(tags=["calendars"])
 
@@ -31,7 +31,7 @@ class CalendarUpdateRequest(BaseModel):
 
 @router.get("/", response_model=List[dict])
 def get_calendars(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Get all calendars for the current user."""
@@ -40,7 +40,7 @@ def get_calendars(
 
 @router.get("/visible", response_model=List[dict])
 def get_visible_calendars(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Get all visible calendars for the current user."""
@@ -49,7 +49,7 @@ def get_visible_calendars(
 
 @router.get("/default", response_model=dict)
 def get_default_calendar(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Get the default calendar for the current user."""
@@ -62,7 +62,7 @@ def get_default_calendar(
 @router.get("/{calendar_id}", response_model=dict)
 def get_calendar(
     calendar_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Get a specific calendar by ID for the current user."""
@@ -74,7 +74,7 @@ def get_calendar(
 @router.post("/", response_model=dict)
 def create_calendar(
     request: CalendarCreateRequest,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Create a new calendar for the current user."""
@@ -105,7 +105,7 @@ def create_calendar(
 def update_calendar(
     calendar_id: UUID,
     request: CalendarUpdateRequest,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Update an existing calendar for the current user."""
@@ -140,7 +140,7 @@ def update_calendar(
 @router.post("/{calendar_id}/set-default")
 def set_default_calendar(
     calendar_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Set a calendar as the default for the current user."""
@@ -159,7 +159,7 @@ def set_default_calendar(
 @router.post("/{calendar_id}/toggle-visibility")
 def toggle_calendar_visibility(
     calendar_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Toggle the visibility of a calendar."""
@@ -181,7 +181,7 @@ def toggle_calendar_visibility(
 @router.delete("/{calendar_id}")
 def delete_calendar(
     calendar_id: UUID,
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Delete a calendar for the current user."""
@@ -213,7 +213,7 @@ def delete_calendar(
 
 @router.post("/ensure-default")
 def ensure_default_calendar(
-    current_user: UserProfile = Depends(get_current_user_dependency),
+    current_user: UserProfile = Depends(current_active_user),
     calendar_repo = Depends(get_calendar_repo)
 ):
     """Ensure the user has a default calendar, create one if needed."""

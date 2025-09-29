@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Zap, ArrowRight, Shield, Sparkles, Users, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,7 +17,6 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -24,6 +24,7 @@ export default function RegisterPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { loginWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +43,6 @@ export default function RegisterPage() {
     try {
       setIsLoading(true);
       await authApi.register({
-        username: formData.username,
         email: formData.email,
         password: formData.password,
         full_name: formData.full_name,
@@ -206,19 +206,7 @@ export default function RegisterPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={async () => {
-                    try {
-                      const response = await fetch('http://localhost:8000/api/v1/auth/google', {
-                        credentials: 'include'  // 🔑 Send session cookies!
-                      });
-                      const data = await response.json();
-                      if (data.auth_url) {
-                        window.location.href = data.auth_url;
-                      }
-                    } catch (error) {
-                      toast.error('Failed to initiate Google OAuth');
-                    }
-                  }}
+                  onClick={() => { loginWithGoogle(); }}
                   className="w-full flex items-center justify-center space-x-2 py-3 mb-4"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -253,22 +241,6 @@ export default function RegisterPage() {
 
                 {/* Email/Password Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Username */}
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm font-medium">
-                      Username
-                    </Label>
-                    <Input
-                      id="username"
-                      name="username"
-                      type="text"
-                      required
-                      value={formData.username}
-                      onChange={handleChange}
-                      placeholder="Choose a username"
-                    />
-                  </div>
-
                   {/* Full Name */}
                   <div className="space-y-2">
                     <Label htmlFor="full_name" className="text-sm font-medium">
@@ -369,7 +341,7 @@ export default function RegisterPage() {
                     <Checkbox
                       id="acceptTerms"
                       checked={acceptTerms}
-                      onCheckedChange={setAcceptTerms}
+                      onCheckedChange={(checked) => setAcceptTerms(checked === true)}
                       className="mt-1"
                     />
                     <div className="flex-1">
